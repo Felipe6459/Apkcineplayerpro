@@ -41,6 +41,30 @@ async function validateTarget(value) {
   return url;
 }
 
+async function readErrorExcerpt(response, limit = 1500) {
+  if (!response.body) return "";
+  const reader = response.body.getReader();
+  const chunks = [];
+  let size = 0;
+  try {
+    while (size < limit) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const part = Buffer.from(value).subarray(0, limit - size);
+      chunks.push(part);
+      size += part.length;
+      if (part.length < value.length) break;
+    }
+  } catch {}
+  try { await reader.cancel(); } catch {}
+  let excerpt = Buffer.concat(chunks).toString("utf8").replace(/<script[\\s\\S]*?<\\/script>/gi, " ").replace(/<style[\\s\\S]*?<\\/style>/gi, " ").replace(/<[^>]+>/g, " ").replace(/\\s+/g, " ").trim();
+  excerpt = excerpt.replace(/https?:\\/\\/[^\\s"'<>]+/gi, value => {
+    try { const u = new URL(value); return u.origin + u.pathname; } catch { return "[URL ocultada]"; }
+  });
+  excerpt = excerpt.replace(/([?&](?:username|password|token|auth|key|user|pass)=)[^&\\s"'<>]+/gi, "$1[oculto]");
+  return excerpt.slice(0, limit);
+}
+
 async function fetchUpstream(url, controller) {
   let response;
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -89,11 +113,22 @@ module.exports = async function handler(req, res) {
       }
       if (!upstream.ok) {
         const status = upstream.status;
-        try { await upstream.body?.cancel(); } catch {}
+        const excerpt = await readErrorExcerpt(upstream);
         const message = [502, 503, 504].includes(status)
-          ? "O servidor de origem da playlist respondeu HTTP " + status + " mesmo após 3 tentativas. O player e a API estão respondendo, mas o servidor de origem está indisponível ou recusando a solicitação."
+          ? "O servidor de origem da playlist respondeu HTTP " + status + " mesmo após 3 tentativas."
           : "Servidor da playlist respondeu HTTP " + status + ".";
-        return res.status(502).json({ error: message, upstreamStatus: status, upstreamHost: target.hostname, upstreamPath: target.pathname, upstreamContentType: upstream.headers.get("content-type") || "" });
+        return res.status(502).json({
+          error: message,
+          upstreamStatus: status,
+          upstreamStatusText: upstream.statusText || "",
+          upstreamHost: target.hostname,
+          upstreamPath: target.pathname,
+          upstreamContentType: upstream.headers.get("content-type") || "",
+          upstreamServer: upstream.headers.get("server") || "",
+          upstreamVia: upstream.headers.get("via") || "",
+          upstreamRetryAfter: upstream.headers.get("retry-after") || "",
+          upstreamErrorExcerpt: excerpt
+        });
       }
       const reader = upstream.body.getReader();
       const prefixChunks = [];
