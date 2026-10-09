@@ -132,6 +132,11 @@ module.exports = async function handler(req, res) {
           upstreamServer: upstream.headers.get("server") || "",
           upstreamVia: upstream.headers.get("via") || "",
           upstreamRetryAfter: upstream.headers.get("retry-after") || "",
+          upstreamDate: upstream.headers.get("date") || "",
+          upstreamContentLength: upstream.headers.get("content-length") || "",
+          upstreamCfRay: upstream.headers.get("cf-ray") || "",
+          upstreamCfCacheStatus: upstream.headers.get("cf-cache-status") || "",
+          upstreamCfMitigated: upstream.headers.get("cf-mitigated") || "",
           upstreamErrorExcerpt: excerpt
         });
       }
