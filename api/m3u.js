@@ -57,11 +57,16 @@ async function readErrorExcerpt(response, limit = 1500) {
     }
   } catch {}
   try { await reader.cancel(); } catch {}
-  let excerpt = Buffer.concat(chunks).toString("utf8").replace(/<script[\\s\\S]*?<\\/script>/gi, " ").replace(/<style[\\s\\S]*?<\\/style>/gi, " ").replace(/<[^>]+>/g, " ").replace(/\\s+/g, " ").trim();
-  excerpt = excerpt.replace(/https?:\\/\\/[^\\s"'<>]+/gi, value => {
+  let excerpt = Buffer.concat(chunks).toString("utf8")
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  excerpt = excerpt.replace(/https?:\/\/[^\s"'<>]+/gi, value => {
     try { const u = new URL(value); return u.origin + u.pathname; } catch { return "[URL ocultada]"; }
   });
-  excerpt = excerpt.replace(/([?&](?:username|password|token|auth|key|user|pass)=)[^&\\s"'<>]+/gi, "$1[oculto]");
+  excerpt = excerpt.replace(/([?&](?:username|password|token|auth|key|user|pass)=)[^&\s"'<>]+/gi, "$1[oculto]");
   return excerpt.slice(0, limit);
 }
 
