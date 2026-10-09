@@ -4,7 +4,8 @@ const net = require("node:net");
 const ALLOWED_ORIGINS = new Set([
   "https://felipe6459.github.io",
   "https://cineplayerpro-m3u.vercel.app",
-  "https://apkcineplayerpro-eqbav2q6q-cine-player.vercel.app"
+  "https://apkcineplayerpro-eqbav2q6q-cine-player.vercel.app",
+  "https://apkcineplayerpro.vercel.app"
 ]);
 const MAX_BYTES = 5 * 1024 * 1024;
 const TIMEOUT_MS = 10000;
