@@ -7,8 +7,8 @@ const ALLOWED_ORIGINS = new Set([
   "https://apkcineplayerpro-eqbav2q6q-cine-player.vercel.app",
   "https://apkcineplayerpro.vercel.app"
 ]);
-const MAX_BYTES = 5 * 1024 * 1024;
-const TIMEOUT_MS = 10000;
+const TIMEOUT_MS = 30000;
+const MAX_HEADER_SCAN_BYTES = 64 * 1024;
 
 function isPrivateIp(ip) {
   if (net.isIPv4(ip)) {
@@ -80,32 +80,55 @@ module.exports = async function handler(req, res) {
         });
       }
       if (!upstream.ok) return res.status(502).json({ error: "Servidor da playlist respondeu HTTP " + upstream.status + "." });
-      const length = Number(upstream.headers.get("content-length") || 0);
-      if (length > MAX_BYTES) return res.status(413).json({ error: "Playlist maior que o limite de 5 MB." });
       const reader = upstream.body.getReader();
-      const chunks = [];
-      let total = 0;
+      const prefixChunks = [];
+      let prefixBytes = 0;
+      let validM3U = false;
+
+      // Validate the M3U header before sending response bytes. Keep only a small
+      // prefix in memory and stream the rest instead of buffering the full playlist.
+      while (!validM3U) {
+        const { done, value } = await reader.read();
+        if (done) {
+          return res.status(422).json({ error: "A resposta não parece ser uma playlist M3U. Pode ser uma página de login ou erro." });
+        }
+        prefixChunks.push(Buffer.from(value));
+        prefixBytes += value.byteLength;
+        const prefixText = Buffer.concat(prefixChunks).toString("utf8").replace(/^\uFEFF/, "");
+        const trimmed = prefixText.trimStart();
+        if (trimmed.startsWith("#EXTM3U")) {
+          validM3U = true;
+        } else if (trimmed.length >= 7 || prefixBytes > MAX_HEADER_SCAN_BYTES) {
+          await reader.cancel();
+          return res.status(422).json({ error: "A resposta não parece ser uma playlist M3U. Pode ser uma página de login ou erro." });
+        }
+      }
+
+      res.setHeader("Content-Type", "application/vnd.apple.mpegurl; charset=utf-8");
+      res.setHeader("Cache-Control", "no-store");
+      res.statusCode = 200;
+
+      const writeChunk = async chunk => {
+        if (!res.write(chunk)) {
+          await new Promise(resolve => res.once("drain", resolve));
+        }
+      };
+
+      for (const chunk of prefixChunks) await writeChunk(chunk);
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        total += value.byteLength;
-        if (total > MAX_BYTES) {
-          await reader.cancel();
-          return res.status(413).json({ error: "Playlist maior que o limite de 5 MB." });
-        }
-        chunks.push(Buffer.from(value));
+        await writeChunk(Buffer.from(value));
       }
-      const text = Buffer.concat(chunks).toString("utf8").replace(/^\uFEFF/, "");
-      if (!text.trimStart().startsWith("#EXTM3U")) {
-        return res.status(422).json({ error: "A resposta não parece ser uma playlist M3U. Pode ser uma página de login ou erro." });
-      }
-      res.setHeader("Content-Type", "application/vnd.apple.mpegurl; charset=utf-8");
-      return res.status(200).send(text);
+      return res.end();
     } finally {
       clearTimeout(timer);
     }
   } catch (error) {
     const msg = error && error.name === "AbortError" ? "Tempo limite ao buscar a playlist." : (error.message || "Falha ao buscar a playlist.");
+    if (res.headersSent) {
+      return res.destroy(error);
+    }
     return res.status(400).json({ error: msg });
   }
 };
