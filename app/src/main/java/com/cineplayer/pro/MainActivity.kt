@@ -4,7 +4,6 @@ import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -15,10 +14,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import androidx.compose.ui.viewinterop.AndroidView
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.net.HttpURLConnection
+import java.net.URL
 
 data class Channel(val name: String, val url: String, val group: String)
 
@@ -36,12 +41,66 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
     }
 
+    private fun parseM3u(text: String): List<Channel> {
+        val result = mutableListOf<Channel>()
+        var pendingName: String? = null
+        var pendingGroup = "Sem categoria"
+
+        for (rawLine in text.lineSequence()) {
+            val line = rawLine.trim()
+            if (line.isEmpty() || line == "#EXTM3U") continue
+
+            if (line.startsWith("#EXTINF", ignoreCase = true)) {
+                val comma = line.indexOf(',')
+                pendingName = if (comma >= 0 && comma < line.lastIndex) {
+                    line.substring(comma + 1).trim().ifBlank { null }
+                } else null
+
+                val groupMatch = Regex("""group-title=["']([^"']*)["']""", RegexOption.IGNORE_CASE)
+                    .find(line)
+                pendingGroup = groupMatch?.groupValues?.getOrNull(1)?.ifBlank { null }
+                    ?: "Sem categoria"
+            } else if (!line.startsWith("#") && pendingName != null &&
+                (line.startsWith("http://", true) || line.startsWith("https://", true))) {
+                result.add(Channel(pendingName!!, line, pendingGroup))
+                pendingName = null
+                pendingGroup = "Sem categoria"
+            }
+        }
+        return result
+    }
+
+    private suspend fun downloadPlaylist(address: String): List<Channel> = withContext(Dispatchers.IO) {
+        val connection = (URL(address).openConnection() as HttpURLConnection).apply {
+            connectTimeout = 15000
+            readTimeout = 20000
+            requestMethod = "GET"
+            setRequestProperty("User-Agent", "CinePlayerPro/0.1")
+        }
+        try {
+            connection.connect()
+            if (connection.responseCode !in 200..299) {
+                throw IllegalStateException("O servidor respondeu HTTP ${connection.responseCode}.")
+            }
+            val body = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+            if (!body.trimStart().startsWith("#EXTM3U", ignoreCase = true)) {
+                throw IllegalStateException("O endereço não parece ser uma playlist M3U válida.")
+            }
+            parseM3u(body)
+        } finally {
+            connection.disconnect()
+        }
+    }
+
     @Composable
     private fun CinePlayerApp() {
         var playlistUrl by remember { mutableStateOf("") }
         var playing by remember { mutableStateOf(false) }
+        var loading by remember { mutableStateOf(false) }
+        var status by remember { mutableStateOf("Cole o endereço de uma playlist M3U autorizada.") }
         var channels by remember { mutableStateOf(listOf<Channel>()) }
         var selected by remember { mutableStateOf<Channel?>(null) }
+        var search by remember { mutableStateOf("") }
 
         MaterialTheme(colorScheme = darkColorScheme(primary = Color(0xFF9C4DFF))) {
             Surface(Modifier.fillMaxSize(), color = Color(0xFF100B18)) {
@@ -56,57 +115,107 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                         )
-                        Text(
-                            "CinePlayer Pro",
-                            modifier = Modifier.padding(16.dp),
-                            color = Color.White
-                        )
+                        Row(
+                            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(selected!!.name, color = Color.White)
+                                Text(selected!!.group, color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
+                            }
+                            TextButton(onClick = { playing = false }) { Text("Voltar à lista") }
+                        }
                     }
                 } else {
-                    Column(Modifier.fillMaxSize().padding(24.dp)) {
+                    Column(Modifier.fillMaxSize().padding(20.dp)) {
                         Text("CinePlayer Pro", style = MaterialTheme.typography.headlineMedium, color = Color.White)
-                        Text("Player IPTV • Android / TV Box", color = Color.LightGray)
-                        Spacer(Modifier.height(20.dp))
+                        Text("Player de mídia • Android / TV Box", color = Color.LightGray)
+                        Spacer(Modifier.height(16.dp))
                         OutlinedTextField(
                             value = playlistUrl,
                             onValueChange = { playlistUrl = it },
                             modifier = Modifier.fillMaxWidth(),
                             label = { Text("URL da playlist M3U") },
+                            placeholder = { Text("https://exemplo.com/lista.m3u") },
                             singleLine = true
                         )
-                        Spacer(Modifier.height(10.dp))
+                        Spacer(Modifier.height(8.dp))
                         Button(
                             onClick = {
-                                channels = listOf(Channel("Playlist M3U", playlistUrl, "Importada"))
+                                val address = playlistUrl.trim()
+                                if (!address.startsWith("https://", true) && !address.startsWith("http://", true)) {
+                                    status = "Informe um endereço iniciado por http:// ou https://."
+                                } else {
+                                    loading = true
+                                    status = "Carregando playlist..."
+                                    lifecycleScope.launch {
+                                        try {
+                                            val loaded = downloadPlaylist(address)
+                                            channels = loaded
+                                            status = if (loaded.isEmpty()) {
+                                                "A playlist foi aberta, mas nenhum canal HTTP/HTTPS foi encontrado."
+                                            } else {
+                                                "Playlist carregada: ${loaded.size} canais."
+                                            }
+                                        } catch (error: Exception) {
+                                            status = "Não foi possível carregar: ${error.message ?: "verifique o endereço e a conexão"}"
+                                        } finally {
+                                            loading = false
+                                        }
+                                    }
+                                }
                             },
-                            enabled = playlistUrl.isNotBlank()
-                        ) { Text("Adicionar playlist") }
-                        Spacer(Modifier.height(20.dp))
-                        if (channels.isEmpty()) {
-                            Text("Nenhuma playlist adicionada.", color = Color.Gray)
-                        } else {
-                            LazyColumn {
-                                items(channels) { channel ->
+                            enabled = playlistUrl.isNotBlank() && !loading,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            if (loading) CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.dp,
+                                color = Color.White
+                            ) else Text("Carregar playlist")
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        Text(status, color = Color(0xFFD7B8FF), style = MaterialTheme.typography.bodySmall)
+                        if (channels.isNotEmpty()) {
+                            Spacer(Modifier.height(12.dp))
+                            OutlinedTextField(
+                                value = search,
+                                onValueChange = { search = it },
+                                modifier = Modifier.fillMaxWidth(),
+                                label = { Text("Buscar canal") },
+                                singleLine = true
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            LazyColumn(Modifier.weight(1f)) {
+                                items(channels.filter {
+                                    it.name.contains(search, ignoreCase = true) ||
+                                        it.group.contains(search, ignoreCase = true)
+                                }) { channel ->
                                     Row(
                                         Modifier.fillMaxWidth().clickable {
                                             selected = channel
-                                            if (channel.url.startsWith("http")) {
-                                                player?.release()
-                                                player = ExoPlayer.Builder(this@MainActivity).build().apply {
-                                                    setMediaItem(MediaItem.fromUri(Uri.parse(channel.url)))
-                                                    prepare()
-                                                    playWhenReady = true
-                                                }
-                                                playing = true
+                                            player?.release()
+                                            player = ExoPlayer.Builder(this@MainActivity).build().apply {
+                                                setMediaItem(MediaItem.fromUri(Uri.parse(channel.url)))
+                                                prepare()
+                                                playWhenReady = true
                                             }
-                                        }.padding(vertical = 16.dp),
+                                            playing = true
+                                        }.padding(vertical = 14.dp, horizontal = 4.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Text(channel.name, color = Color.White, modifier = Modifier.weight(1f))
+                                        Column(Modifier.weight(1f)) {
+                                            Text(channel.name, color = Color.White)
+                                            Text(channel.group, color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
+                                        }
                                         Text("▶", color = Color(0xFFB66CFF))
                                     }
+                                    HorizontalDivider(color = Color(0xFF352440))
                                 }
                             }
+                        } else {
+                            Spacer(Modifier.height(12.dp))
+                            Text("Os canais aparecerão aqui depois que a playlist for carregada.", color = Color.Gray)
                         }
                     }
                 }
