@@ -93,7 +93,7 @@ module.exports = async function handler(req, res) {
         const message = [502, 503, 504].includes(status)
           ? "O servidor de origem da playlist respondeu HTTP " + status + " mesmo após 3 tentativas. O player e a API estão respondendo, mas o servidor de origem está indisponível ou recusando a solicitação."
           : "Servidor da playlist respondeu HTTP " + status + ".";
-        return res.status(502).json({ error: message, upstreamStatus: status });
+        return res.status(502).json({ error: message, upstreamStatus: status, upstreamHost: target.hostname, upstreamPath: target.pathname, upstreamContentType: upstream.headers.get("content-type") || "" });
       }
       const reader = upstream.body.getReader();
       const prefixChunks = [];
