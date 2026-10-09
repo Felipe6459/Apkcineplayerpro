@@ -66,7 +66,7 @@ function parseM3U(text,baseUrl){
  }
  return out;
 }
- }
+ function loadText(text,source,baseUrl){const items=parseM3U(text,baseUrl);state.items=items;state.category="__all";renderFilters();renderChannels();message(items.length?("Playlist carregada: "+items.length+" canais. Origem: "+source+"."):"Não encontrei entradas de canais HTTP/HTTPS. Confira se o texto começa com #EXTM3U e se cada canal tem um endereço na linha seguinte.");}
  async function parseM3UAsync(text,baseUrl){
   const lines=String(text||"").replace(/^\uFEFF/,"").replace(/\r/g,"").split("\n");
   const out=[];let meta=null;
