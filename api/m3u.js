@@ -41,6 +41,22 @@ async function validateTarget(value) {
   return url;
 }
 
+async function fetchUpstream(url, controller) {
+  let response;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    response = await fetch(url.href, {
+      method: "GET",
+      redirect: "manual",
+      signal: controller.signal,
+      headers: { "Accept": "application/vnd.apple.mpegurl, audio/x-mpegurl, text/plain, */*" }
+    });
+    if (![502, 503, 504].includes(response.status) || attempt === 2) return response;
+    try { await response.body?.cancel(); } catch {}
+    await new Promise(resolve => setTimeout(resolve, 500 * (attempt + 1)));
+  }
+  return response;
+}
+
 module.exports = async function handler(req, res) {
   const origin = req.headers.origin || "";
   if (ALLOWED_ORIGINS.has(origin)) {
@@ -64,22 +80,21 @@ module.exports = async function handler(req, res) {
     const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
     let upstream;
     try {
-      upstream = await fetch(target.href, {
-        method: "GET",
-        redirect: "manual",
-        signal: controller.signal,
-        headers: { "Accept": "application/vnd.apple.mpegurl, audio/x-mpegurl, text/plain, */*" }
-      });
+      upstream = await fetchUpstream(target, controller);
       for (let i = 0; [301, 302, 303, 307, 308].includes(upstream.status) && i < 3; i++) {
         const location = upstream.headers.get("location");
         if (!location) break;
         target = await validateTarget(new URL(location, target).href);
-        upstream = await fetch(target.href, {
-          method: "GET", redirect: "manual", signal: controller.signal,
-          headers: { "Accept": "application/vnd.apple.mpegurl, audio/x-mpegurl, text/plain, */*" }
-        });
+        upstream = await fetchUpstream(target, controller);
       }
-      if (!upstream.ok) return res.status(502).json({ error: "Servidor da playlist respondeu HTTP " + upstream.status + "." });
+      if (!upstream.ok) {
+        const status = upstream.status;
+        try { await upstream.body?.cancel(); } catch {}
+        const message = [502, 503, 504].includes(status)
+          ? "O servidor de origem da playlist respondeu HTTP " + status + " mesmo após 3 tentativas. O player e a API estão respondendo, mas o servidor de origem está indisponível ou recusando a solicitação."
+          : "Servidor da playlist respondeu HTTP " + status + ".";
+        return res.status(502).json({ error: message, upstreamStatus: status });
+      }
       const reader = upstream.body.getReader();
       const prefixChunks = [];
       let prefixBytes = 0;
