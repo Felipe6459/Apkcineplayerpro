@@ -71,18 +71,45 @@ async function readErrorExcerpt(response, limit = 1500) {
 }
 
 async function fetchUpstream(url, controller) {
+  // Try distinct client identities: the same generic request was repeatedly
+  // returning an empty Cloudflare 503 from the provider.
+  const profiles = [
+    {
+      name: "browser-chrome",
+      headers: {
+        "Accept": "application/vnd.apple.mpegurl, audio/x-mpegurl, text/plain, */*",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+        "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7"
+      }
+    },
+    {
+      name: "vlc",
+      headers: { "Accept": "*/*", "User-Agent": "VLC/3.0.21 LibVLC/3.0.21" }
+    },
+    {
+      name: "exoplayer",
+      headers: { "Accept": "*/*", "User-Agent": "ExoPlayerLib/2.19.1" }
+    }
+  ];
   let response;
-  for (let attempt = 0; attempt < 3; attempt++) {
-    response = await fetch(url.href, {
-      method: "GET",
-      redirect: "manual",
-      signal: controller.signal,
-      headers: { "Accept": "application/vnd.apple.mpegurl, audio/x-mpegurl, text/plain, */*" }
-    });
-    if (![502, 503, 504].includes(response.status) || attempt === 2) return response;
-    try { await response.body?.cancel(); } catch {}
-    await new Promise(resolve => setTimeout(resolve, 500 * (attempt + 1)));
+  let lastProfile = profiles[0].name;
+  for (const profile of profiles) {
+    lastProfile = profile.name;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      response = await fetch(url.href, {
+        method: "GET",
+        redirect: "manual",
+        signal: controller.signal,
+        headers: profile.headers
+      });
+      response.__cinePlayerRequestProfile = profile.name;
+      if (![502, 503, 504].includes(response.status)) return response;
+      if (attempt === 1 && profile === profiles[profiles.length - 1]) return response;
+      try { await response.body?.cancel(); } catch {}
+      await new Promise(resolve => setTimeout(resolve, 350 * (attempt + 1)));
+    }
   }
+  if (response) response.__cinePlayerRequestProfile = lastProfile;
   return response;
 }
 
@@ -137,6 +164,7 @@ module.exports = async function handler(req, res) {
           upstreamCfRay: upstream.headers.get("cf-ray") || "",
           upstreamCfCacheStatus: upstream.headers.get("cf-cache-status") || "",
           upstreamCfMitigated: upstream.headers.get("cf-mitigated") || "",
+          upstreamRequestProfile: upstream.__cinePlayerRequestProfile || "unknown",
           upstreamErrorExcerpt: excerpt
         });
       }
