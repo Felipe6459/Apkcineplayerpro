@@ -17,6 +17,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import androidx.compose.ui.viewinterop.AndroidView
@@ -30,6 +32,7 @@ data class Channel(val name: String, val url: String, val group: String)
 
 class MainActivity : ComponentActivity() {
     private var player: ExoPlayer? = null
+    private var playbackErrorMessage by mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -56,8 +59,8 @@ class MainActivity : ComponentActivity() {
         var pendingName: String? = null
         var pendingGroup = "Sem categoria"
 
-        for (rawLine in text.lineSequence()) {
-            val line = rawLine.trim()
+        for (rawLine in text.removePrefix("\uFEFF").lineSequence()) {
+            val line = rawLine.trim().removePrefix("\uFEFF")
             if (line.isEmpty() || line == "#EXTM3U") continue
 
             if (line.startsWith("#EXTINF", ignoreCase = true)) {
@@ -82,10 +85,14 @@ class MainActivity : ComponentActivity() {
 
     private suspend fun downloadPlaylist(address: String): List<Channel> = withContext(Dispatchers.IO) {
         val connection = (URL(address).openConnection() as HttpURLConnection).apply {
-            connectTimeout = 15000
-            readTimeout = 20000
+            connectTimeout = 20000
+            readTimeout = 30000
             requestMethod = "GET"
-            setRequestProperty("User-Agent", "CinePlayerPro/0.1")
+            instanceFollowRedirects = true
+            useCaches = false
+            setRequestProperty("User-Agent", "VLC/3.0.20 LibVLC/3.0.20 CinePlayerPro/0.2")
+            setRequestProperty("Accept", "application/vnd.apple.mpegurl, audio/x-mpegurl, application/x-mpegURL, */*")
+            setRequestProperty("Accept-Encoding", "identity")
         }
         try {
             connection.connect()
@@ -93,10 +100,15 @@ class MainActivity : ComponentActivity() {
                 throw IllegalStateException("O servidor respondeu HTTP ${connection.responseCode}.")
             }
             val body = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
-            if (!body.trimStart().startsWith("#EXTM3U", ignoreCase = true)) {
-                throw IllegalStateException("O endereço não parece ser uma playlist M3U válida.")
+            if (!body.trimStart().removePrefix("\uFEFF").startsWith("#EXTM3U", ignoreCase = true)) {
+                val preview = body.trim().take(100).replace("\\s+".toRegex(), " ")
+                throw IllegalStateException("A resposta não é uma M3U (pode ser página de login ou bloqueio). Início recebido: $preview")
             }
-            parseM3u(body)
+            val parsed = parseM3u(body)
+            if (parsed.isEmpty()) {
+                throw IllegalStateException("A M3U abriu, mas não encontrei canais com links HTTP/HTTPS. O formato pode usar autenticação ou outro tipo de endereço.")
+            }
+            parsed
         } finally {
             connection.disconnect()
         }
@@ -134,6 +146,7 @@ class MainActivity : ComponentActivity() {
                             Column(Modifier.weight(1f)) {
                                 Text(selected!!.name, color = Color.White)
                                 Text(selected!!.group, color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
+                        playbackErrorMessage?.let { Text(it, color = Color(0xFFFF8A80), style = MaterialTheme.typography.bodySmall) }
                             }
                             TextButton(onClick = { playing = false }) { Text("Voltar à lista") }
                         }
@@ -225,8 +238,21 @@ class MainActivity : ComponentActivity() {
                                     Row(
                                         Modifier.fillMaxWidth().clickable {
                                             selected = channel
+                                            playbackErrorMessage = null
                                             player?.release()
                                             player = ExoPlayer.Builder(this@MainActivity).build().apply {
+                                                addListener(object : Player.Listener {
+                                                    override fun onPlayerError(error: PlaybackException) {
+                                                        playbackErrorMessage = when (error.errorCode) {
+                                                            PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS -> "O servidor recusou o vídeo (HTTP)."
+                                                            PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
+                                                            PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT -> "Falha de conexão ou tempo esgotado ao abrir o canal."
+                                                            PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED,
+                                                            PlaybackException.ERROR_CODE_PARSING_MANIFEST_MALFORMED -> "Formato de vídeo/playlist não reconhecido."
+                                                            else -> "Erro ao reproduzir: ${error.errorCodeName}"
+                                                        }
+                                                    }
+                                                })
                                                 setMediaItem(MediaItem.fromUri(Uri.parse(channel.url)))
                                                 prepare()
                                                 playWhenReady = true
