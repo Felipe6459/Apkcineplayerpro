@@ -7,6 +7,7 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -39,6 +40,15 @@ class MainActivity : ComponentActivity() {
         player?.release()
         player = null
         super.onDestroy()
+    }
+
+    private fun loadFavorites(): Set<String> =
+        getSharedPreferences("cineplayer_preferences", MODE_PRIVATE)
+            .getStringSet("favorite_urls", emptySet())?.toSet() ?: emptySet()
+
+    private fun saveFavorites(values: Set<String>) {
+        getSharedPreferences("cineplayer_preferences", MODE_PRIVATE).edit()
+            .putStringSet("favorite_urls", values.toSet()).apply()
     }
 
     private fun parseM3u(text: String): List<Channel> {
@@ -101,6 +111,8 @@ class MainActivity : ComponentActivity() {
         var channels by remember { mutableStateOf(listOf<Channel>()) }
         var selected by remember { mutableStateOf<Channel?>(null) }
         var search by remember { mutableStateOf("") }
+        var favorites by remember { mutableStateOf(loadFavorites()) }
+        var selectedCategory by remember { mutableStateOf("Todas") }
 
         MaterialTheme(colorScheme = darkColorScheme(primary = Color(0xFF9C4DFF))) {
             Surface(Modifier.fillMaxSize(), color = Color(0xFF100B18)) {
@@ -185,12 +197,31 @@ class MainActivity : ComponentActivity() {
                                 label = { Text("Buscar canal") },
                                 singleLine = true
                             )
+                            Spacer(Modifier.height(10.dp))
+                            val categoryOptions = listOf("Todas", "Favoritos") +
+                                channels.map { it.group }.distinct().sorted()
+                            LazyRow(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                contentPadding = PaddingValues(vertical = 4.dp)
+                            ) {
+                                items(categoryOptions.distinct()) { category ->
+                                    FilterChip(
+                                        selected = selectedCategory == category,
+                                        onClick = { selectedCategory = category },
+                                        label = { Text(category) }
+                                    )
+                                }
+                            }
                             Spacer(Modifier.height(8.dp))
+                            val visibleChannels = channels.filter { channel ->
+                                (selectedCategory == "Todas" ||
+                                    (selectedCategory == "Favoritos" && channel.url in favorites) ||
+                                    channel.group == selectedCategory) &&
+                                    (channel.name.contains(search, ignoreCase = true) ||
+                                        channel.group.contains(search, ignoreCase = true))
+                            }
                             LazyColumn(Modifier.weight(1f)) {
-                                items(channels.filter {
-                                    it.name.contains(search, ignoreCase = true) ||
-                                        it.group.contains(search, ignoreCase = true)
-                                }) { channel ->
+                                items(visibleChannels) { channel ->
                                     Row(
                                         Modifier.fillMaxWidth().clickable {
                                             selected = channel
@@ -209,6 +240,19 @@ class MainActivity : ComponentActivity() {
                                             Text(channel.group, color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
                                         }
                                         Text("▶", color = Color(0xFFB66CFF))
+                                        Spacer(Modifier.width(12.dp))
+                                        Text(
+                                            if (channel.url in favorites) "★" else "☆",
+                                            color = Color(0xFFFFD166),
+                                            modifier = Modifier.clickable {
+                                                favorites = if (channel.url in favorites) {
+                                                    favorites - channel.url
+                                                } else {
+                                                    favorites + channel.url
+                                                }
+                                                saveFavorites(favorites)
+                                            }.padding(horizontal = 8.dp, vertical = 4.dp)
+                                        )
                                     }
                                     HorizontalDivider(color = Color(0xFF352440))
                                 }
