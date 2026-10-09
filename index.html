@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#100b18">
+  <title>CinePlayer Pro</title>
+  <style>
+    :root{color-scheme:dark;--bg:#100b18;--panel:#1b1228;--violet:#a855f7;--text:#f8f5ff;--muted:#c5b9d5}
+    *{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at top,#2a1640 0,var(--bg) 55%);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,sans-serif;min-height:100vh;display:grid;place-items:center;padding:24px}
+    main{width:min(720px,100%);background:rgba(27,18,40,.92);border:1px solid #43265d;border-radius:24px;padding:clamp(24px,6vw,48px);box-shadow:0 20px 70px #0005}
+    .logo{width:64px;height:64px;border-radius:18px;background:linear-gradient(135deg,#c084fc,#7e22ce);display:grid;place-items:center;font-size:30px;font-weight:800;margin-bottom:24px}
+    h1{font-size:clamp(2rem,8vw,3.2rem);line-height:1.05;margin:0 0 12px}p{color:var(--muted);line-height:1.65}
+    .tag{display:inline-block;color:#e9d5ff;border:1px solid #7141a1;border-radius:999px;padding:6px 12px;font-size:.85rem;margin-bottom:16px}
+    .features{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:26px 0}
+    .feature{padding:16px;background:#241732;border:1px solid #402752;border-radius:14px}.feature strong{display:block;margin-bottom:5px}.feature span{font-size:.9rem;color:var(--muted)}
+    .status{padding:14px 16px;border-left:3px solid var(--violet);background:#251633;border-radius:8px;color:#eadcf8}
+    a{color:#d8b4fe}footer{font-size:.85rem;color:#a99ab9;margin-top:28px}
+  </style>
+</head>
+<body>
+  <main>
+    <div class="logo" aria-hidden="true">▶</div>
+    <div class="tag">Projeto em desenvolvimento</div>
+    <h1>CinePlayer Pro</h1>
+    <p>Um player de mídia com foco em Android, Android TV e TV Box, com identidade violeta e experiência pensada para telas grandes.</p>
+    <section class="features" aria-label="Recursos planejados">
+      <div class="feature"><strong>Playlists M3U</strong><span>Importação de listas autorizadas.</span></div>
+      <div class="feature"><strong>Reprodução</strong><span>Base com Android Media3 ExoPlayer.</span></div>
+      <div class="feature"><strong>TV e controle</strong><span>Interface preparada para evoluir para navegação por controle remoto.</span></div>
+    </section>
+    <div class="status">O APK ainda não está publicado. Esta página é a apresentação web do projeto e não é o aplicativo Android.</div>
+    <p>Código-fonte: <a href="https://github.com/Felipe6459/Apkcineplayerpro">GitHub — Apkcineplayerpro</a></p>
+    <footer>Use apenas playlists e conteúdos que você tenha autorização para acessar.</footer>
+  </main>
+</body>
+</html>
