@@ -137,6 +137,22 @@ module.exports = async function handler(req, res) {
     let upstream;
     try {
       upstream = await fetchUpstream(target, controller);
+      // If plain HTTP is returning a gateway/service error, test HTTPS on the
+      // same host/path before reporting failure. Keep the original response if
+      // the secure endpoint cannot be reached.
+      if (target.protocol === "http:" && [502, 503, 504].includes(upstream.status)) {
+        const originalTarget = target;
+        const secureTarget = new URL(target.href);
+        secureTarget.protocol = "https:";
+        try {
+          const validatedSecureTarget = await validateTarget(secureTarget.href);
+          const secureResponse = await fetchUpstream(validatedSecureTarget, controller);
+          target = validatedSecureTarget;
+          upstream = secureResponse;
+        } catch {
+          target = originalTarget;
+        }
+      }
       for (let i = 0; [301, 302, 303, 307, 308].includes(upstream.status) && i < 3; i++) {
         const location = upstream.headers.get("location");
         if (!location) break;
@@ -152,6 +168,7 @@ module.exports = async function handler(req, res) {
         return res.status(502).json({
           error: message,
           upstreamStatus: status,
+          upstreamProtocol: target.protocol,
           upstreamStatusText: upstream.statusText || "",
           upstreamHost: target.hostname,
           upstreamPath: target.pathname,
