@@ -89,6 +89,30 @@ async function fetchUpstream(url, controller) {
     {
       name: "exoplayer",
       headers: { "Accept": "*/*", "User-Agent": "ExoPlayerLib/2.19.1" }
+    },
+    {
+      name: "android-okhttp",
+      headers: {
+        "Accept": "*/*",
+        "User-Agent": "okhttp/4.12.0",
+        "Accept-Encoding": "gzip"
+      }
+    },
+    {
+      name: "tivimate",
+      headers: {
+        "Accept": "*/*",
+        "User-Agent": "TiviMate/5.1.6",
+        "Accept-Language": "pt-BR,pt;q=0.9"
+      }
+    },
+    {
+      name: "iptv-smarters",
+      headers: {
+        "Accept": "*/*",
+        "User-Agent": "IPTVSmartersPlayer",
+        "Accept-Language": "pt-BR,pt;q=0.9"
+      }
     }
   ];
   let response;
