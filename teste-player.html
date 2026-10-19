@@ -128,8 +128,8 @@ function playItem(x){
  const candidates=[];
  const add=(u)=>{if(u&&!candidates.includes(u))candidates.push(u)};
  const hlsVariant=new URL(parsed.href);
- if(/\\/ts\\/?$/i.test(hlsVariant.pathname))hlsVariant.pathname=hlsVariant.pathname.replace(/\\/ts\\/?$/i,"/m3u8");
- else if(/\\.ts$/i.test(hlsVariant.pathname))hlsVariant.pathname=hlsVariant.pathname.replace(/\\.ts$/i,".m3u8");
+ if(/\/ts\/?$/i.test(hlsVariant.pathname))hlsVariant.pathname=hlsVariant.pathname.replace(/\/ts\/?$/i,"/m3u8");
+ if(/\/ts\/?$/i.test(hlsVariant.pathname))hlsVariant.pathname=hlsVariant.pathname.replace(/\/ts\/?$/i,"/m3u8");
  if(hlsVariant.href!==parsed.href&&parsed.protocol==="http:"){const secureVariant=new URL(hlsVariant.href);secureVariant.protocol="https:";add(secureVariant.href)}
  if(hlsVariant.href!==parsed.href)add(hlsVariant.href);
  if(parsed.protocol==="http:"){const secureOriginal=new URL(parsed.href);secureOriginal.protocol="https:";add(secureOriginal.href)}
@@ -146,7 +146,7 @@ function playItem(x){
   if(/codec|buffer.*append|media.*error/.test(d))return "O navegador recebeu dados, mas não conseguiu decodificar o formato de vídeo/áudio.";
   return "O navegador não conseguiu abrir o stream. O detalhe abaixo indica a etapa exata que falhou.";
  };
- const directMedia=/\\.(mp4|webm|mp3|aac|ogg|m4v|mov)(?:$|[?#])/i.test(original);
+ const directMedia=/\.(mp4|webm|mp3|aac|ogg|m4v|mov)(?:$|[?#])/i.test(original);
  const hlsSupported=!!(window.Hls&&Hls.isSupported());
  let index=0,lastError=null,attempts=[];
  const cleanup=()=>{if(state.hls){state.hls.destroy();state.hls=null}};
