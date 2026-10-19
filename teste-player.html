@@ -36,12 +36,12 @@ video{display:block;width:100%;max-height:55vh;background:#050407;border-radius:
 <section class="panel player-panel">
 <h2>2. Reprodução</h2>
 <video id="video" controls playsinline preload="metadata"></video>
-<div id="playing" class="player-title">Nenhum canal selecionado</div>
+<div id="playing" class="player-title">Nenhum conteúdo selecionado</div>
 <p class="hint">A reprodução depende do formato do canal, da conexão e das permissões do servidor. Alguns streams não permitem reprodução em navegador.</p>
 </section>
 <section class="panel list-panel">
-<h2>3. Canais e categorias</h2>
-<label for="search">Pesquisar canal</label><input id="search" type="search" placeholder="Digite o nome do canal">
+<h2>3. Conteúdos e categorias</h2>
+<label for="search">Pesquisar canal</label><input id="search" type="search" placeholder="Digite o nome do conteúdo">
 <div id="sections" class="sections" aria-label="Tipo de conteúdo"><button class="active" data-area="live">TV ao vivo</button><button data-area="movies">Filmes</button><button data-area="series">Séries</button><button data-area="all">Todos</button></div>
 <div id="filters" class="filters"><button class="active" data-cat="__all">Todos</button><button data-cat="__fav">★ Favoritos</button></div>
 <div id="channels" class="channels"><div class="empty">Carregue uma playlist para listar os canais.</div></div>
@@ -59,11 +59,11 @@ function parseM3U(text,baseUrl){
  const lines=String(text||"").replace(/^\uFEFF/,"").replace(/\r/g,"").split("\n");const out=[];let meta=null;
  const attr=(line,key)=>{const re=new RegExp("(?:^|\\s)"+key+"\\s*=\\s*(?:\"([^\"]*)\"|'([^']*)'|([^\\s,]+))","i");const m=line.match(re);return m?(m[1]??m[2]??m[3]??"").trim():""};
  for(const raw of lines){const line=raw.trim().replace(/^\uFEFF/,"");if(!line)continue;
-  if(/^#EXTINF(?:\s|:)/i.test(line)){const comma=line.indexOf(",");const attrs=comma>=0?line.slice(0,comma):line;const display=comma>=0?line.slice(comma+1).trim():"";meta={name:display||attr(attrs,"tvg-name")||"Canal sem nome",group:attr(attrs,"group-title")||"Outros",logo:attr(attrs,"tvg-logo")||""};continue;}
-  if(line.startsWith("#"))continue;
+  if(/^#EXTINF(?:\s|:)/i.test(line)){const comma=line.indexOf(",");const attrs=comma>=0?line.slice(0,comma):line;const display=comma>=0?line.slice(comma+1).trim():"";meta={name:display||attr(attrs,"tvg-name")||"Conteúdo sem nome",group:attr(attrs,"group-title")||"Outros",logo:attr(attrs,"tvg-logo")||"",type:attr(attrs,"tvg-type")||attr(attrs,"content-type")||attr(attrs,"type"),tvgId:attr(attrs,"tvg-id"),series:attr(attrs,"series")||attr(attrs,"series-title"),season:attr(attrs,"season")||attr(attrs,"tvg-season"),episode:attr(attrs,"episode-num")||attr(attrs,"tvg-episode")};continue;}
+  if(/^#EXTGRP:/i.test(line)){if(meta)meta.group=line.slice(line.indexOf(":")+1).trim()||meta.group;continue;}if(line.startsWith("#"))continue;
   let url=line;try{if(baseUrl)url=new URL(line,baseUrl).href}catch(_){}
   if(!/^https?:\/\//i.test(url))continue;
-  out.push({id:out.length,url,name:meta?.name||line,group:meta?.group||"Outros",logo:meta?.logo||""});meta=null;
+  out.push({id:out.length,url,name:meta?.name||line,group:meta?.group||"Outros",logo:meta?.logo||"",contentType:meta?.type||"",tvgId:meta?.tvgId||"",series:meta?.series||"",season:meta?.season||"",episode:meta?.episode||""});meta=null;
  }
  return out;
 }
@@ -72,11 +72,11 @@ function parseM3U(text,baseUrl){
  const decoder=new TextDecoder("utf-8");let pending="";let meta=null;const out=[];let firstLine=true;let bytes=0;
  const attr=(line,key)=>{const re=new RegExp("(?:^|\\s)"+key+"\\s*=\\s*(?:\"([^\"]*)\"|'([^']*)'|([^\\s,]+))","i");const m=line.match(re);return m?(m[1]??m[2]??m[3]??"").trim():""};
  function processLine(raw){let line=raw.trim();if(firstLine){line=line.replace(/^\uFEFF/,"");firstLine=false;if(!line.startsWith("#EXTM3U"))throw new Error("A resposta recebida não começa com #EXTM3U; pode não ser uma playlist válida.");}if(!line)return;
-  if(/^#EXTINF(?:\s|:)/i.test(line)){const comma=line.indexOf(",");const attrs=comma>=0?line.slice(0,comma):line;const display=comma>=0?line.slice(comma+1).trim():"";meta={name:display||attr(attrs,"tvg-name")||"Canal sem nome",group:attr(attrs,"group-title")||"Outros",logo:attr(attrs,"tvg-logo")||""};return;}
-  if(line.startsWith("#"))return;
+  if(/^#EXTINF(?:\s|:)/i.test(line)){const comma=line.indexOf(",");const attrs=comma>=0?line.slice(0,comma):line;const display=comma>=0?line.slice(comma+1).trim():"";meta={name:display||attr(attrs,"tvg-name")||"Conteúdo sem nome",group:attr(attrs,"group-title")||"Outros",logo:attr(attrs,"tvg-logo")||"",type:attr(attrs,"tvg-type")||attr(attrs,"content-type")||attr(attrs,"type"),tvgId:attr(attrs,"tvg-id"),series:attr(attrs,"series")||attr(attrs,"series-title"),season:attr(attrs,"season")||attr(attrs,"tvg-season"),episode:attr(attrs,"episode-num")||attr(attrs,"tvg-episode")};return;}
+  if(/^#EXTGRP:/i.test(line)){if(meta)meta.group=line.slice(line.indexOf(":")+1).trim()||meta.group;return;}if(line.startsWith("#"))return;
   let url=line;try{if(baseUrl)url=new URL(line,baseUrl).href}catch(_){}
   if(!/^https?:\/\//i.test(url))return;
-  out.push({id:out.length,url,name:meta?.name||line,group:meta?.group||"Outros",logo:meta?.logo||""});meta=null;
+  out.push({id:out.length,url,name:meta?.name||line,group:meta?.group||"Outros",logo:meta?.logo||"",contentType:meta?.type||"",tvgId:meta?.tvgId||"",series:meta?.series||"",season:meta?.season||"",episode:meta?.episode||""});meta=null;
  }
  while(true){const part=await reader.read();if(part.done)break;bytes+=part.value.byteLength;pending+=decoder.decode(part.value,{stream:true});const lines=pending.split("\n");pending=lines.pop()||"";for(const line of lines)processLine(line.replace(/\r$/,""));if(bytes>0&&bytes%(2*1024*1024)<part.value.byteLength){message("Lendo playlist em fluxo... "+Math.round(bytes/1048576)+" MB recebidos; "+out.length+" canais identificados.");await new Promise(resolve=>setTimeout(resolve,0));}}
  pending+=decoder.decode();if(pending)processLine(pending.replace(/\r$/,""));if(firstLine)throw new Error("O servidor devolveu uma playlist vazia.");return out;
@@ -87,16 +87,31 @@ async function parseM3UAsync(text,baseUrl){
   const attr=(line,key)=>{const re=new RegExp("(?:^|\\s)"+key+"\\s*=\\s*(?:\"([^\"]*)\"|'([^']*)'|([^\\s,]+))","i");const m=line.match(re);return m?(m[1]??m[2]??m[3]??"").trim():""};
   for(let i=0;i<lines.length;i++){
    const line=lines[i].trim().replace(/^\uFEFF/,"");if(!line)continue;
-   if(/^#EXTINF(?:\s|:)/i.test(line)){const comma=line.indexOf(",");const attrs=comma>=0?line.slice(0,comma):line;const display=comma>=0?line.slice(comma+1).trim():"";meta={name:display||attr(attrs,"tvg-name")||"Canal sem nome",group:attr(attrs,"group-title")||"Outros",logo:attr(attrs,"tvg-logo")||""};continue;}
-   if(line.startsWith("#"))continue;
+   if(/^#EXTINF(?:\s|:)/i.test(line)){const comma=line.indexOf(",");const attrs=comma>=0?line.slice(0,comma):line;const display=comma>=0?line.slice(comma+1).trim():"";meta={name:display||attr(attrs,"tvg-name")||"Conteúdo sem nome",group:attr(attrs,"group-title")||"Outros",logo:attr(attrs,"tvg-logo")||"",type:attr(attrs,"tvg-type")||attr(attrs,"content-type")||attr(attrs,"type"),tvgId:attr(attrs,"tvg-id"),series:attr(attrs,"series")||attr(attrs,"series-title"),season:attr(attrs,"season")||attr(attrs,"tvg-season"),episode:attr(attrs,"episode-num")||attr(attrs,"tvg-episode")};continue;}
+   if(/^#EXTGRP:/i.test(line)){if(meta)meta.group=line.slice(line.indexOf(":")+1).trim()||meta.group;continue;}if(line.startsWith("#"))continue;
    let url=line;try{if(baseUrl)url=new URL(line,baseUrl).href}catch(_){}
    if(!/^https?:\/\//i.test(url))continue;
-   out.push({id:out.length,url,name:meta?.name||line,group:meta?.group||"Outros",logo:meta?.logo||""});meta=null;
+   out.push({id:out.length,url,name:meta?.name||line,group:meta?.group||"Outros",logo:meta?.logo||"",contentType:meta?.type||"",tvgId:meta?.tvgId||"",series:meta?.series||"",season:meta?.season||"",episode:meta?.episode||""});meta=null;
    if(out.length%1000===0){message("Organizando playlist... "+out.length+" canais.");await new Promise(resolve=>setTimeout(resolve,0));}
   }
   return out;
  }
-function classify(item){const text=((item.group||"")+" "+(item.name||"")).toLocaleLowerCase("pt-BR");if(/\b(filme|filmes|movie|movies|cinema|vod filmes|filmoteca)\b/.test(text))return "movies";if(/\b(série|séries|series|seriado|seriados|temporada|episódio|episodios|episode)\b/.test(text))return "series";return "live"}
+function classify(item){
+ const norm=s=>String(s||"").normalize("NFD").replace(/[\\u0300-\\u036f]/g,"").toLocaleLowerCase("pt-BR");
+ const group=norm(item.group),name=norm(item.name),type=norm(item.contentType),url=norm(item.url);
+ const explicitType=type.match(/\\b(movie|movies|film|filme|filmes|vod|series|serie|tv|live|channel|episode|episodio)\\b/);
+ if(explicitType){const t=explicitType[1];if(/movie|film|filme|vod/.test(t))return "movies";if(/series|serie|episode|episodio/.test(t))return "series";if(/tv|live|channel/.test(t))return "live";}
+ if(/\\/(series|seri(es|e)|show|shows)\\//.test(url))return "series";
+ if(/\\/(movie|movies|film|films|vod)\\//.test(url))return "movies";
+ if(/\\/(live|channel|channels)\\//.test(url))return "live";
+ if(/\\b(series|serie|series|seriados?|temporada|episodios?|s[0-9]{1,2}e[0-9]{1,3}|[0-9]{1,2}x[0-9]{1,3})\\b/.test(group))return "series";
+ if(/\\b(filmes?|movies?|films?|cinema|filmoteca|vod filmes|lancamentos de filmes)\\b/.test(group))return "movies";
+ if(/\\b(tv ao vivo|canais? ao vivo|live tv|canais?|televisao|television)\\b/.test(group))return "live";
+ if(item.series||item.season||item.episode||/\\b(temporada|episodio|s[0-9]{1,2}e[0-9]{1,3}|[0-9]{1,2}x[0-9]{1,3})\\b/.test(name))return "series";
+ if(/\\b(filmes?|movies?|cinema|filmoteca)\\b/.test(name))return "movies";
+ if(/\\.(mp4|mkv|avi|mov|m4v)(?:$|[?#])/.test(url)&&! /\\/(live|channel|channels)\\//.test(url))return "movies";
+ return "live";
+}
 function getFiltered(){const q=$("search").value.trim().toLocaleLowerCase("pt-BR");return state.items.filter(x=>{const area=classify(x);const inArea=state.area==="all"||state.area==="favorites"||(state.area===area);const inFavorites=state.area!=="favorites"||state.favorites.has(x.url);const inCategory=state.category==="__all"||(state.category==="__fav"&&state.favorites.has(x.url))||x.group===state.category;return inArea&&inFavorites&&inCategory&&(!q||x.name.toLocaleLowerCase("pt-BR").includes(q)||(x.group||"").toLocaleLowerCase("pt-BR").includes(q))})}
 function renderFilters(){const sections=$("sections");sections.querySelectorAll("button").forEach(b=>{b.classList.toggle("active",b.dataset.area===state.area);b.onclick=()=>{state.area=b.dataset.area;state.category="__all";state.rendered=200;renderFilters();renderChannels()}});const groups=[...new Set(state.items.filter(x=>state.area==="all"||state.area==="favorites"||classify(x)===state.area).map(x=>x.group||"Outros"))].sort((a,b)=>a.localeCompare(b,"pt-BR"));const box=$("filters");box.innerHTML="";[["__all","Todos os grupos"],...groups.map(g=>[g,g])].forEach(([value,label])=>{const b=document.createElement("button");b.textContent=label;b.dataset.cat=value;b.className=state.category===value?"active":"";b.onclick=()=>{state.category=value;state.rendered=200;renderFilters();renderChannels()};box.appendChild(b)})}
 function renderChannels(reset=true){if(reset)state.rendered=200;const box=$("channels");box.innerHTML="";const list=getFiltered();if(!list.length){box.innerHTML='<div class="empty">Nenhum conteúdo nesta seleção. Experimente outra área ou pesquisa.</div>';return}list.slice(0,state.rendered).forEach(x=>{const row=document.createElement("div");row.className="channel";const play=document.createElement("button");play.className="secondary name";play.innerHTML="▶ "+escapeHtml(x.name)+'<small>'+escapeHtml(x.group||"Outros")+'</small>';play.onclick=()=>playItem(x);const fav=document.createElement("button");fav.className="star";fav.title="Alternar favorito";fav.textContent=state.favorites.has(x.url)?"★":"☆";fav.onclick=()=>{state.favorites.has(x.url)?state.favorites.delete(x.url):state.favorites.add(x.url);localStorage.setItem("cineplayer-favs",JSON.stringify([...state.favorites]));renderChannels(false)};row.append(play,fav);box.appendChild(row)});if(list.length>state.rendered){const more=document.createElement("button");more.className="secondary";more.style.width="100%";more.textContent="Carregar mais conteúdos ("+Math.min(state.rendered,list.length)+" de "+list.length+")";more.onclick=()=>{state.rendered+=200;renderChannels(false)};box.appendChild(more)}const shown=Math.min(state.rendered,list.length);message("Exibindo "+shown+" de "+list.length+" conteúdos nesta seleção. Total da playlist: "+state.items.length+".")}
@@ -105,7 +120,7 @@ function playItem(x){const v=$("video");if(state.hls){state.hls.destroy();state.
  const safeUrl=value=>{try{const u=new URL(value);return u.origin+u.pathname}catch(_){return "endereço não identificado"}};
  const nativePlay=()=>{if(usedNative)return;usedNative=true;if(state.hls){state.hls.destroy();state.hls=null}v.src=url;v.load();v.play().catch(err=>{const mediaErr=v.error;const code=mediaErr?mediaErr.code:"indisponível";const detail=mediaErr?({1:"reprodução cancelada",2:"falha de rede",3:"erro ao decodificar o vídeo",4:"formato ou fonte não suportada"}[mediaErr.code]||mediaErr.message||"erro de mídia"):"o navegador recusou iniciar a reprodução";message("Diagnóstico de reprodução: "+detail+" (MediaError "+code+"). O endereço do canal foi selecionado, mas o navegador não conseguiu reproduzir o stream. Link: "+safeUrl(url)+". Se funciona em outro player, pode exigir cabeçalhos ou um formato não suportado pelo navegador.")})};
  v.onerror=()=>{if(usedNative){const e=v.error;if(e)message("Diagnóstico de reprodução: MediaError "+e.code+" — "+({1:"reprodução interrompida",2:"falha de rede ao buscar o vídeo",3:"erro de decodificação",4:"formato ou endereço não suportado"}[e.code]||"erro de mídia")+". Link: "+safeUrl(url)+".")}};
- if(!directMedia&&window.Hls&&Hls.isSupported()){state.hls=new Hls({enableWorker:true,lowLatencyMode:false});state.hls.on(Hls.Events.ERROR,(_,data)=>{if(data.fatal&&!hlsErrorReported){hlsErrorReported=true;const status=data.response&&data.response.code?("HTTP "+data.response.code):((data.networkDetails&&data.networkDetails.status)?("HTTP "+data.networkDetails.status):"HTTP não informado");const reason=data.reason||data.response&&data.response.text||"";message("Diagnóstico HLS: tipo="+data.type+"; detalhe="+data.details+"; "+status+(reason?"; resposta="+String(reason).slice(0,180):"")+". Tentando reprodução direta do navegador...");nativePlay()}});state.hls.on(Hls.Events.MANIFEST_PARSED,()=>{message("Manifesto HLS carregado; tentando iniciar o canal.")});state.hls.loadSource(url);state.hls.attachMedia(v);}
+ if(!directMedia&&window.Hls&&Hls.isSupported()){state.hls=new Hls({enableWorker:true,lowLatencyMode:false});state.hls.on(Hls.Events.ERROR,(_,data)=>{if(data.fatal&&!hlsErrorReported){hlsErrorReported=true;const status=data.response&&data.response.code?("HTTP "+data.response.code):((data.networkDetails&&data.networkDetails.status)?("HTTP "+data.networkDetails.status):"HTTP não informado");const reason=data.reason||data.response&&data.response.text||"";message("Diagnóstico HLS: tipo="+data.type+"; detalhe="+data.details+"; "+status+(reason?"; resposta="+String(reason).slice(0,180):"")+". Tentando reprodução direta do navegador...");nativePlay()}});state.hls.on(Hls.Events.MANIFEST_PARSED,()=>{message("Manifesto HLS carregado; tentando iniciar o conteúdo.")});state.hls.loadSource(url);state.hls.attachMedia(v);}
  else{nativePlay()}
  if(!usedNative)v.play().catch(()=>{});
 }
