@@ -119,13 +119,41 @@ function getFiltered(){const q=$("search").value.trim().toLocaleLowerCase("pt-BR
 function renderFilters(){const sections=$("sections");sections.querySelectorAll("button").forEach(b=>{b.classList.toggle("active",b.dataset.area===state.area);b.onclick=()=>{state.area=b.dataset.area;state.category="__all";state.rendered=200;renderFilters();renderChannels()}});const groups=[...new Set(state.items.filter(x=>state.area==="all"||state.area==="favorites"||classify(x)===state.area).map(x=>x.group||"Outros"))].sort((a,b)=>a.localeCompare(b,"pt-BR"));const box=$("filters");box.innerHTML="";[["__all","Todos os grupos"],...groups.map(g=>[g,g])].forEach(([value,label])=>{const b=document.createElement("button");b.textContent=label;b.dataset.cat=value;b.className=state.category===value?"active":"";b.onclick=()=>{state.category=value;state.rendered=200;renderFilters();renderChannels()};box.appendChild(b)})}
 function renderChannels(reset=true){if(reset)state.rendered=200;const box=$("channels");box.innerHTML="";const list=getFiltered();if(!list.length){box.innerHTML='<div class="empty">Nenhum conteúdo nesta seleção. Experimente outra área ou pesquisa.</div>';return}list.slice(0,state.rendered).forEach(x=>{const row=document.createElement("div");row.className="channel";const play=document.createElement("button");play.className="secondary name";play.innerHTML="▶ "+escapeHtml(x.name)+'<small>'+escapeHtml(x.group||"Outros")+'</small>';play.onclick=()=>playItem(x);const fav=document.createElement("button");fav.className="star";fav.title="Alternar favorito";fav.textContent=state.favorites.has(x.url)?"★":"☆";fav.onclick=()=>{state.favorites.has(x.url)?state.favorites.delete(x.url):state.favorites.add(x.url);localStorage.setItem("cineplayer-favs",JSON.stringify([...state.favorites]));renderChannels(false)};row.append(play,fav);box.appendChild(row)});if(list.length>state.rendered){const more=document.createElement("button");more.className="secondary";more.style.width="100%";more.textContent="Carregar mais conteúdos ("+Math.min(state.rendered,list.length)+" de "+list.length+")";more.onclick=()=>{state.rendered+=200;renderChannels(false)};box.appendChild(more)}const shown=Math.min(state.rendered,list.length);message("Exibindo "+shown+" de "+list.length+" conteúdos nesta seleção. Total da playlist: "+state.items.length+".")}
 function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
-function playItem(x){const v=$("video");if(state.hls){state.hls.destroy();state.hls=null}v.pause();v.removeAttribute("src");v.load();$("playing").textContent=x.name;const url=x.url;const directMedia=/\.(mp4|webm|mp3|aac|ogg|m4v|mov)(?:$|[?#])/i.test(url);let usedNative=false;let hlsErrorReported=false;
- const safeUrl=value=>{try{const u=new URL(value);return u.origin+u.pathname}catch(_){return "endereço não identificado"}};
- const nativePlay=()=>{if(usedNative)return;usedNative=true;if(state.hls){state.hls.destroy();state.hls=null}v.src=url;v.load();v.play().catch(err=>{const mediaErr=v.error;const code=mediaErr?mediaErr.code:"indisponível";const detail=mediaErr?({1:"reprodução cancelada",2:"falha de rede",3:"erro ao decodificar o vídeo",4:"formato ou fonte não suportada"}[mediaErr.code]||mediaErr.message||"erro de mídia"):"o navegador recusou iniciar a reprodução";message("Diagnóstico de reprodução: "+detail+" (MediaError "+code+"). O endereço do canal foi selecionado, mas o navegador não conseguiu reproduzir o stream. Link: "+safeUrl(url)+". Se funciona em outro player, pode exigir cabeçalhos ou um formato não suportado pelo navegador.")})};
- v.onerror=()=>{if(usedNative){const e=v.error;if(e)message("Diagnóstico de reprodução: MediaError "+e.code+" — "+({1:"reprodução interrompida",2:"falha de rede ao buscar o vídeo",3:"erro de decodificação",4:"formato ou endereço não suportado"}[e.code]||"erro de mídia")+". Link: "+safeUrl(url)+".")}};
- if(!directMedia&&window.Hls&&Hls.isSupported()){state.hls=new Hls({enableWorker:true,lowLatencyMode:false});state.hls.on(Hls.Events.ERROR,(_,data)=>{if(data.fatal&&!hlsErrorReported){hlsErrorReported=true;const status=data.response&&data.response.code?("HTTP "+data.response.code):((data.networkDetails&&data.networkDetails.status)?("HTTP "+data.networkDetails.status):"HTTP não informado");const reason=data.reason||data.response&&data.response.text||"";message("Diagnóstico HLS: tipo="+data.type+"; detalhe="+data.details+"; "+status+(reason?"; resposta="+String(reason).slice(0,180):"")+". Tentando reprodução direta do navegador...");nativePlay()}});state.hls.on(Hls.Events.MANIFEST_PARSED,()=>{message("Manifesto HLS carregado; tentando iniciar o conteúdo.")});state.hls.loadSource(url);state.hls.attachMedia(v);}
- else{nativePlay()}
- if(!usedNative)v.play().catch(()=>{});
+function playItem(x){
+ const v=$("video");if(state.hls){state.hls.destroy();state.hls=null}v.pause();v.removeAttribute("src");v.load();$("playing").textContent=x.name;
+ const original=x.url;let originalUrl;try{originalUrl=new URL(original)}catch(_){message("O endereço deste conteúdo é inválido.");return}
+ const candidates=[];const addCandidate=(value)=>{if(value&&!candidates.includes(value))candidates.push(value)};
+ const hlsUrl=new URL(originalUrl.href);
+ if(/\/ts\/?$/i.test(hlsUrl.pathname)){hlsUrl.pathname=hlsUrl.pathname.replace(/\/ts\/?$/i,"/m3u8")}
+ else if(/\.ts$/i.test(hlsUrl.pathname)){hlsUrl.pathname=hlsUrl.pathname.replace(/\.ts$/i,".m3u8")}
+ if(hlsUrl.href!==originalUrl.href){
+  if(originalUrl.protocol==="http:"){const secureHls=new URL(hlsUrl.href);secureHls.protocol="https:";addCandidate(secureHls.href)}
+  addCandidate(hlsUrl.href);
+ }
+ if(originalUrl.protocol==="http:"){const secure=new URL(originalUrl.href);secure.protocol="https:";addCandidate(secure.href)}
+ addCandidate(original);
+ const safeUrl=value=>{try{const u=new URL(value);return u.origin+"/[caminho ocultado]"}catch(_){return "endereço não identificado"}};
+ const directMedia=/\.(mp4|webm|mp3|aac|ogg|m4v|mov)(?:$|[?#])/i.test(original);
+ let candidateIndex=0,usedNative=false,lastHlsDetail="",hlsErrorReported=false;
+ const cleanupHls=()=>{if(state.hls){state.hls.destroy();state.hls=null}};
+ const reportNativeError=()=>{const mediaErr=v.error;const code=mediaErr?mediaErr.code:"indisponível";const detail=mediaErr?({1:"reprodução cancelada",2:"falha de rede",3:"erro ao decodificar o vídeo",4:"formato ou fonte não suportada"}[mediaErr.code]||mediaErr.message||"erro de mídia"):"o navegador recusou iniciar a reprodução";message("Diagnóstico de reprodução: "+detail+" (MediaError "+code+"). A URL pode entregar MPEG-TS bruto, que o navegador não reproduz diretamente. Variantes testadas: "+candidates.map(safeUrl).join(" | ")+(lastHlsDetail?" | HLS: "+lastHlsDetail:"")+". Se o provedor só oferecer /ts, este teste web precisa de uma fonte HLS /m3u8 ou de um player Android com suporte a MPEG-TS.")};
+ const nativePlay=()=>{cleanupHls();usedNative=true;v.src=original;v.load();v.play().catch(reportNativeError)};
+ const tryNext=()=>{
+  cleanupHls();v.pause();v.removeAttribute("src");v.load();
+  if(window.Hls&&Hls.isSupported()&&candidateIndex<candidates.length){
+   const candidate=candidates[candidateIndex++];hlsErrorReported=false;
+   state.hls=new Hls({enableWorker:true,lowLatencyMode:false});
+   state.hls.on(Hls.Events.ERROR,(_,data)=>{
+    if(data.fatal&&!hlsErrorReported){hlsErrorReported=true;lastHlsDetail="tipo="+data.type+", detalhe="+data.details+(data.response&&data.response.code? ", HTTP "+data.response.code:"");if(candidateIndex<candidates.length){message("Este formato não abriu no navegador; tentando outra variante de reprodução ("+candidateIndex+" de "+candidates.length+").");tryNext()}else nativePlay()}
+   });
+   state.hls.on(Hls.Events.MANIFEST_PARSED,()=>{message("Fonte HLS reconhecida; iniciando reprodução.");v.play().catch(()=>{})});
+   state.hls.loadSource(candidate);state.hls.attachMedia(v);return;
+  }
+  nativePlay();
+ };
+ v.onerror=()=>{if(usedNative&&v.error)reportNativeError()};
+ if(directMedia){nativePlay();return}
+ if(window.Hls&&Hls.isSupported())tryNext();else nativePlay();
 }
 $("file").addEventListener("change",async e=>{const f=e.target.files&&e.target.files[0];if(!f)return;try{loadText(await f.text(),f.name)}catch(err){message("Não foi possível ler o arquivo. Tente outro arquivo M3U.")}});
 $("loadText").onclick=()=>{const text=$("m3utext").value.trim();if(!text){message("Cole o conteúdo da playlist M3U primeiro.");return}if(!text.replace(/^\uFEFF/,"").trimStart().startsWith("#EXTM3U")){message("O conteúdo colado não começa com #EXTM3U. Copie a playlist completa, começando por essa linha.");return}loadText(text,"texto colado")};
