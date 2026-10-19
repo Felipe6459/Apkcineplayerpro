@@ -12,7 +12,7 @@ import org.json.JSONObject
  * request headers commonly found in VLC-compatible playlists.
  */
 internal object M3uPlaylistParser {
-    private val attributePattern = Regex("""([\\w-]+)\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s,]*))""")
+    private val attributePattern = Regex("""([\w-]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s,]*))""")
 
     fun parse(reader: BufferedReader, playlistUrl: String): List<Channel> {
         val result = ArrayList<Channel>()
