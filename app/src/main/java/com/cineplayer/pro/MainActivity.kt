@@ -20,6 +20,8 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
 import androidx.compose.ui.viewinterop.AndroidView
 import kotlinx.coroutines.Dispatchers
@@ -28,7 +30,7 @@ import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
 import java.net.URL
 
-data class Channel(val name: String, val url: String, val group: String)
+data class Channel(val name: String, val url: String, val group: String, val logo: String? = null, val headers: Map<String, String> = emptyMap())
 
 class MainActivity : ComponentActivity() {
     private var player: ExoPlayer? = null
@@ -54,44 +56,23 @@ class MainActivity : ComponentActivity() {
             .putStringSet("favorite_urls", values.toSet()).apply()
     }
 
-    private fun parseM3u(text: String): List<Channel> {
-        val result = mutableListOf<Channel>()
-        var pendingName: String? = null
-        var pendingGroup = "Sem categoria"
-
-        for (rawLine in text.removePrefix("\uFEFF").lineSequence()) {
-            val line = rawLine.trim().removePrefix("\uFEFF")
-            if (line.isEmpty() || line == "#EXTM3U") continue
-
-            if (line.startsWith("#EXTINF", ignoreCase = true)) {
-                val comma = line.indexOf(',')
-                pendingName = if (comma >= 0 && comma < line.lastIndex) {
-                    line.substring(comma + 1).trim().ifBlank { null }
-                } else null
-
-                val groupMatch = Regex("""group-title=["']([^"']*)["']""", RegexOption.IGNORE_CASE)
-                    .find(line)
-                pendingGroup = groupMatch?.groupValues?.getOrNull(1)?.ifBlank { null }
-                    ?: "Sem categoria"
-            } else if (!line.startsWith("#") && pendingName != null &&
-                (line.startsWith("http://", true) || line.startsWith("https://", true))) {
-                result.add(Channel(pendingName!!, line, pendingGroup))
-                pendingName = null
-                pendingGroup = "Sem categoria"
-            }
-        }
-        return result
-    }
-
     private suspend fun downloadPlaylist(address: String): List<Channel> = withContext(Dispatchers.IO) {
-        val connection = (URL(address).openConnection() as HttpURLConnection).apply {
+        val parsedUrl = try {
+            URL(address)
+        } catch (_: Exception) {
+            throw IllegalStateException("O endereço da playlist não é válido.")
+        }
+        if (parsedUrl.protocol !in listOf("http", "https")) {
+            throw IllegalStateException("Use um endereço HTTP ou HTTPS.")
+        }
+        val connection = (parsedUrl.openConnection() as HttpURLConnection).apply {
             connectTimeout = 20000
-            readTimeout = 30000
+            readTimeout = 45000
             requestMethod = "GET"
             instanceFollowRedirects = true
             useCaches = false
-            setRequestProperty("User-Agent", "VLC/3.0.20 LibVLC/3.0.20 CinePlayerPro/0.2")
-            setRequestProperty("Accept", "application/vnd.apple.mpegurl, audio/x-mpegurl, application/x-mpegURL, */*")
+            setRequestProperty("User-Agent", "CinePlayerPro/0.3 Android")
+            setRequestProperty("Accept", "application/vnd.apple.mpegurl, audio/x-mpegurl, application/x-mpegURL, text/plain, */*")
             setRequestProperty("Accept-Encoding", "identity")
         }
         try {
@@ -99,16 +80,11 @@ class MainActivity : ComponentActivity() {
             if (connection.responseCode !in 200..299) {
                 throw IllegalStateException("O servidor respondeu HTTP ${connection.responseCode}.")
             }
-            val body = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
-            if (!body.trimStart().removePrefix("\uFEFF").startsWith("#EXTM3U", ignoreCase = true)) {
-                val preview = body.trim().take(100).replace("\\s+".toRegex(), " ")
-                throw IllegalStateException("A resposta não é uma M3U (pode ser página de login ou bloqueio). Início recebido: $preview")
+            // Parse incrementally, one line at a time. This avoids holding the
+            // full playlist text and a second split copy in memory.
+            connection.inputStream.bufferedReader(Charsets.UTF_8).use { reader ->
+                M3uPlaylistParser.parse(reader, connection.url.toExternalForm())
             }
-            val parsed = parseM3u(body)
-            if (parsed.isEmpty()) {
-                throw IllegalStateException("A M3U abriu, mas não encontrei canais com links HTTP/HTTPS. O formato pode usar autenticação ou outro tipo de endereço.")
-            }
-            parsed
         } finally {
             connection.disconnect()
         }
@@ -240,7 +216,13 @@ class MainActivity : ComponentActivity() {
                                             selected = channel
                                             playbackErrorMessage = null
                                             player?.release()
-                                            player = ExoPlayer.Builder(this@MainActivity).build().apply {
+                                            val httpFactory = DefaultHttpDataSource.Factory()
+                                                .setUserAgent("CinePlayerPro/0.3 Android")
+                                                .setAllowCrossProtocolRedirects(true)
+                                                .setDefaultRequestProperties(channel.headers)
+                                            player = ExoPlayer.Builder(this@MainActivity)
+                                                .setMediaSourceFactory(DefaultMediaSourceFactory(httpFactory))
+                                                .build().apply {
                                                 addListener(object : Player.Listener {
                                                     override fun onPlayerError(error: PlaybackException) {
                                                         playbackErrorMessage = when (error.errorCode) {
