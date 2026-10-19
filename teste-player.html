@@ -124,15 +124,15 @@ function playItem(x){
  const original=x.url;let originalUrl;try{originalUrl=new URL(original)}catch(_){message("O endereço deste conteúdo é inválido.");return}
  const candidates=[];const addCandidate=(value)=>{if(value&&!candidates.includes(value))candidates.push(value)};
  const hlsUrl=new URL(originalUrl.href);
- if(/\/ts\/?$/i.test(hlsUrl.pathname)){hlsUrl.pathname=hlsUrl.pathname.replace(/\/ts\/?$/i,"/m3u8");addCandidate(hlsUrl.href)}
- else if(/\.ts$/i.test(hlsUrl.pathname)){hlsUrl.pathname=hlsUrl.pathname.replace(/\.ts$/i,".m3u8");addCandidate(hlsUrl.href)}
- if(originalUrl.protocol==="http:"){
-  const secure=new URL(originalUrl.href);secure.protocol="https:";
-  addCandidate(secure.href);
-  if(candidates.length){const secureHls=new URL(candidates[0]);secureHls.protocol="https:";addCandidate(secureHls.href)}
+ if(/\/ts\/?$/i.test(hlsUrl.pathname)){hlsUrl.pathname=hlsUrl.pathname.replace(/\/ts\/?$/i,"/m3u8")}
+ else if(/\.ts$/i.test(hlsUrl.pathname)){hlsUrl.pathname=hlsUrl.pathname.replace(/\.ts$/i,".m3u8")}
+ if(hlsUrl.href!==originalUrl.href){
+  if(originalUrl.protocol==="http:"){const secureHls=new URL(hlsUrl.href);secureHls.protocol="https:";addCandidate(secureHls.href)}
+  addCandidate(hlsUrl.href);
  }
+ if(originalUrl.protocol==="http:"){const secure=new URL(originalUrl.href);secure.protocol="https:";addCandidate(secure.href)}
  addCandidate(original);
- const safeUrl=value=>{try{const u=new URL(value);return u.origin+u.pathname.replace(/\/[^/]+\/(?:m3u8|ts)\/?$/i,"/[credencial]/$1")}catch(_){return "endereço não identificado"}};
+ const safeUrl=value=>{try{const u=new URL(value);return u.origin+"/[caminho ocultado]"}catch(_){return "endereço não identificado"}};
  const directMedia=/\.(mp4|webm|mp3|aac|ogg|m4v|mov)(?:$|[?#])/i.test(original);
  let candidateIndex=0,usedNative=false,lastHlsDetail="",hlsErrorReported=false;
  const cleanupHls=()=>{if(state.hls){state.hls.destroy();state.hls=null}};
