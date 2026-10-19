@@ -97,20 +97,23 @@ async function parseM3UAsync(text,baseUrl){
   return out;
  }
 function classify(item){
+ if(item._area)return item._area;
  const norm=s=>String(s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLocaleLowerCase("pt-BR");
  const group=norm(item.group),name=norm(item.name),type=norm(item.contentType),url=norm(item.url);
+ let area="live";
  const explicitType=type.match(/\b(movie|movies|film|filme|filmes|vod|series|serie|tv|live|channel|episode|episodio)\b/);
- if(explicitType){const t=explicitType[1];if(/movie|film|filme|vod/.test(t))return "movies";if(/series|serie|episode|episodio/.test(t))return "series";if(/tv|live|channel/.test(t))return "live";}
- if(/\/(series|seri(es|e)|show|shows)\//.test(url))return "series";
- if(/\/(movie|movies|film|films|vod)\//.test(url))return "movies";
- if(/\/(live|channel|channels)\//.test(url))return "live";
- if(/\b(series|serie|seriados?|temporada|episodios?|s[0-9]{1,2}e[0-9]{1,3}|[0-9]{1,2}x[0-9]{1,3})\b/.test(group))return "series";
- if(/\b(filmes?|movies?|films?|cinema|filmoteca|vod filmes|lancamentos de filmes)\b/.test(group))return "movies";
- if(/\b(tv ao vivo|canais? ao vivo|live tv|canais?|televisao|television)\b/.test(group))return "live";
- if(item.series||item.season||item.episode||/\b(temporada|episodio|s[0-9]{1,2}e[0-9]{1,3}|[0-9]{1,2}x[0-9]{1,3})\b/.test(name))return "series";
- if(/\b(filmes?|movies?|cinema|filmoteca)\b/.test(name))return "movies";
- if(/\.(mp4|mkv|avi|mov|m4v)(?:$|[?#])/.test(url)&&! /\/(live|channel|channels)\//.test(url))return "movies";
- return "live";
+ if(explicitType){const t=explicitType[1];if(/movie|film|filme|vod/.test(t))area="movies";else if(/series|serie|episode|episodio/.test(t))area="series";else if(/tv|live|channel/.test(t))area="live";}
+ if(area==="live"&&/\/(series|seri(es|e)|show|shows)\//.test(url))area="series";
+ else if(area==="live"&&/\/(movie|movies|film|films|vod)\//.test(url))area="movies";
+ else if(area==="live"&&/\/(live|channel|channels)\//.test(url))area="live";
+ if(area==="live"&&/\b(series|serie|seriados?|temporada|episodios?|s[0-9]{1,2}e[0-9]{1,3}|[0-9]{1,2}x[0-9]{1,3})\b/.test(group))area="series";
+ else if(area==="live"&&/\b(filmes?|movies?|films?|cinema|filmoteca|vod filmes|lancamentos de filmes)\b/.test(group))area="movies";
+ else if(area==="live"&&/\b(tv ao vivo|canais? ao vivo|live tv|canais?|televisao|television)\b/.test(group))area="live";
+ if(area==="live"&&(item.series||item.season||item.episode||/\b(temporada|episodio|s[0-9]{1,2}e[0-9]{1,3}|[0-9]{1,2}x[0-9]{1,3})\b/.test(name)))area="series";
+ if(area==="live"&&/\b(filmes?|movies?|cinema|filmoteca)\b/.test(name))area="movies";
+ if(area==="live"&&/\.(mp4|mkv|avi|mov|m4v)(?:$|[?#])/.test(url)&&! /\/(live|channel|channels)\//.test(url))area="movies";
+ item._area=area;
+ return area;
 }
 function getFiltered(){const q=$("search").value.trim().toLocaleLowerCase("pt-BR");return state.items.filter(x=>{const area=classify(x);const inArea=state.area==="all"||state.area==="favorites"||(state.area===area);const inFavorites=state.area!=="favorites"||state.favorites.has(x.url);const inCategory=state.category==="__all"||(state.category==="__fav"&&state.favorites.has(x.url))||x.group===state.category;return inArea&&inFavorites&&inCategory&&(!q||x.name.toLocaleLowerCase("pt-BR").includes(q)||(x.group||"").toLocaleLowerCase("pt-BR").includes(q))})}
 function renderFilters(){const sections=$("sections");sections.querySelectorAll("button").forEach(b=>{b.classList.toggle("active",b.dataset.area===state.area);b.onclick=()=>{state.area=b.dataset.area;state.category="__all";state.rendered=200;renderFilters();renderChannels()}});const groups=[...new Set(state.items.filter(x=>state.area==="all"||state.area==="favorites"||classify(x)===state.area).map(x=>x.group||"Outros"))].sort((a,b)=>a.localeCompare(b,"pt-BR"));const box=$("filters");box.innerHTML="";[["__all","Todos os grupos"],...groups.map(g=>[g,g])].forEach(([value,label])=>{const b=document.createElement("button");b.textContent=label;b.dataset.cat=value;b.className=state.category===value?"active":"";b.onclick=()=>{state.category=value;state.rendered=200;renderFilters();renderChannels()};box.appendChild(b)})}
