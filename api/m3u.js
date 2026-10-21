@@ -188,7 +188,7 @@ module.exports = async function handler(req, res) {
         const status = upstream.status;
         const excerpt = await readErrorExcerpt(upstream);
         const message = [502, 503, 504].includes(status)
-          ? "O servidor de origem da playlist respondeu HTTP " + status + " mesmo após 3 tentativas."
+          ? "O servidor de origem da playlist respondeu HTTP " + status + " às tentativas feitas pelo serviço auxiliar. Isso costuma ocorrer quando a origem bloqueia requisições vindas de servidores externos, exige autenticação/cabeçalhos específicos ou está indisponível."
           : "Servidor da playlist respondeu HTTP " + status + ".";
         return res.status(502).json({
           error: message,
