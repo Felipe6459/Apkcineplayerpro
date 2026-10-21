@@ -118,23 +118,31 @@ async function fetchUpstream(url, controller) {
   ];
   let response;
   let lastProfile = profiles[0].name;
+  const attempts = [];
   for (const profile of profiles) {
     lastProfile = profile.name;
     for (let attempt = 0; attempt < 2; attempt++) {
-      response = await fetch(url.href, {
-        method: "GET",
-        redirect: "manual",
-        signal: controller.signal,
-        headers: profile.headers
-      });
-      response.__cinePlayerRequestProfile = profile.name;
-      if (![502, 503, 504].includes(response.status)) return response;
-      if (attempt === 1 && profile === profiles[profiles.length - 1]) return response;
-      try { await response.body?.cancel(); } catch {}
-      await new Promise(resolve => setTimeout(resolve, 350 * (attempt + 1)));
+      try {
+        response = await fetch(url.href, { method: "GET", redirect: "manual", signal: controller.signal, headers: profile.headers });
+        response.__cinePlayerRequestProfile = profile.name;
+        attempts.push({ profile: profile.name, attempt: attempt + 1, status: response.status,
+          statusText: response.statusText || "", server: response.headers.get("server") || "",
+          contentType: response.headers.get("content-type") || "", cfRay: response.headers.get("cf-ray") || "",
+          cfMitigated: response.headers.get("cf-mitigated") || "" });
+        response.__cinePlayerAttempts = attempts.slice();
+        if (![502, 503, 504].includes(response.status)) return response;
+        if (attempt === 1 && profile === profiles[profiles.length - 1]) return response;
+        try { await response.body?.cancel(); } catch {}
+        await new Promise(resolve => setTimeout(resolve, 350 * (attempt + 1)));
+      } catch (error) {
+        attempts.push({ profile: profile.name, attempt: attempt + 1, networkError: error?.message || String(error),
+          errorName: error?.name || "Error", errorCode: error?.code || error?.cause?.code || "" });
+        if (error?.name === "AbortError") throw error;
+        if (attempt === 1 && profile === profiles[profiles.length - 1]) throw error;
+      }
     }
   }
-  if (response) response.__cinePlayerRequestProfile = lastProfile;
+  if (response) { response.__cinePlayerRequestProfile = lastProfile; response.__cinePlayerAttempts = attempts; }
   return response;
 }
 
@@ -187,27 +195,26 @@ module.exports = async function handler(req, res) {
       if (!upstream.ok) {
         const status = upstream.status;
         const excerpt = await readErrorExcerpt(upstream);
-        const message = [502, 503, 504].includes(status)
-          ? "O servidor de origem da playlist respondeu HTTP " + status + " às tentativas feitas pelo serviço auxiliar. Isso costuma ocorrer quando a origem bloqueia requisições vindas de servidores externos, exige autenticação/cabeçalhos específicos ou está indisponível."
-          : "Servidor da playlist respondeu HTTP " + status + ".";
+        const headers = Object.fromEntries([
+          "content-type", "server", "via", "retry-after", "date", "content-length",
+          "cf-ray", "cf-cache-status", "cf-mitigated", "www-authenticate",
+          "x-request-id", "x-cache", "x-served-by"
+        ].map(name => [name, upstream.headers.get(name) || ""]));
+        const cause = status === 401 || status === 403
+          ? "A origem recusou o acesso ou exige autenticação/permissão."
+          : status === 404 ? "O caminho da playlist não foi encontrado."
+          : status === 429 ? "A origem limitou as requisições."
+          : [502, 503, 504].includes(status)
+            ? "A origem retornou erro de serviço/gateway; isso não comprova, sozinho, que houve bloqueio."
+            : "A origem respondeu com um status HTTP de erro.";
         return res.status(502).json({
-          error: message,
-          upstreamStatus: status,
-          upstreamProtocol: target.protocol,
-          upstreamStatusText: upstream.statusText || "",
-          upstreamHost: target.hostname,
-          upstreamPath: target.pathname,
-          upstreamContentType: upstream.headers.get("content-type") || "",
-          upstreamServer: upstream.headers.get("server") || "",
-          upstreamVia: upstream.headers.get("via") || "",
-          upstreamRetryAfter: upstream.headers.get("retry-after") || "",
-          upstreamDate: upstream.headers.get("date") || "",
-          upstreamContentLength: upstream.headers.get("content-length") || "",
-          upstreamCfRay: upstream.headers.get("cf-ray") || "",
-          upstreamCfCacheStatus: upstream.headers.get("cf-cache-status") || "",
-          upstreamCfMitigated: upstream.headers.get("cf-mitigated") || "",
-          upstreamRequestProfile: upstream.__cinePlayerRequestProfile || "unknown",
-          upstreamErrorExcerpt: excerpt
+          error: "A origem respondeu HTTP " + status + ". O serviço auxiliar não conseguiu obter a playlist; veja o diagnóstico técnico.",
+          stage: "upstream_http_response",
+          diagnosis: { cause, upstreamStatus: status, upstreamStatusText: upstream.statusText || "",
+            upstreamProtocol: target.protocol, upstreamHost: target.hostname, upstreamPath: target.pathname,
+            requestProfile: upstream.__cinePlayerRequestProfile || "unknown",
+            responseHeaders: headers, responseExcerpt: excerpt,
+            attempts: upstream.__cinePlayerAttempts || [] }
         });
       }
       const reader = upstream.body.getReader();
@@ -256,9 +263,9 @@ module.exports = async function handler(req, res) {
     }
   } catch (error) {
     const msg = error && error.name === "AbortError" ? "Tempo limite ao buscar a playlist." : (error.message || "Falha ao buscar a playlist.");
-    if (res.headersSent) {
-      return res.destroy(error);
-    }
-    return res.status(400).json({ error: msg });
+    if (res.headersSent) return res.destroy(error);
+    return res.status(400).json({ error: msg, stage: "request_or_network_error",
+      diagnosis: { cause: error?.name === "AbortError" ? "timeout" : "dns_tls_network_or_validation",
+        errorName: error?.name || "Error", errorCode: error?.code || error?.cause?.code || "", errorMessage: msg } });
   }
 };
