@@ -12,13 +12,115 @@
 <section class="panel player"><h2>2. Reprodução</h2><video id="video" controls playsinline preload="metadata"></video><div id="now">Nenhum conteúdo selecionado</div><p class="hint">Importante: esta versão não troca automaticamente /live/ID.ts por /m3u8 nem força HTTPS, pois isso pode mudar o endereço do conteúdo selecionado.</p></section>
 <section class="panel list"><h2>3. Conteúdos</h2><input id="search" type="search" placeholder="Pesquisar canal, filme ou série"><div class="filters" id="filters"><button class="active" data-area="all">Todos</button><button data-area="live">TV ao vivo</button><button data-area="movies">Filmes</button><button data-area="series">Séries</button></div><div id="channels" class="channels"><div class="hint">Nenhuma lista carregada.</div></div></section>
 </main>
-<script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script><script src="https://cdn.jsdelivr.net/npm/mpegts.js@1.8.0/dist/mpegts.js"></script><script>
-(()=>{const $=id=>document.getElementById(id);let items=[],hls=null,area='all',selectedUrl='';const status=t=>$('status').textContent=t;const norm=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
-function parse(text){const lines=String(text||'').replace(/^\uFEFF/,'').replace(/\r/g,'').split('\n');let meta=null;const out=[];const attr=(s,k)=>{const re=new RegExp("(?:^|\\s)"+k+"\\s*=\\s*(?:\"([^\"]*)\"|'([^']*)'|([^\\s,]+))","i");const m=s.match(re);return m?(m[1]??m[2]??m[3]??'').trim():''};for(const raw of lines){const line=raw.trim();if(!line)continue;if(/^#EXTINF(?:\s|:)/i.test(line)){const c=line.indexOf(',');const head=c<0?line:line.slice(0,c);meta={name:c<0?'Conteúdo':line.slice(c+1).trim(),group:attr(head,'group-title')||'Outros',type:attr(head,'tvg-type')||attr(head,'type')};continue}if(line[0]==='#')continue;if(/^https?:\/\//i.test(line)){out.push({url:line,name:meta?.name||line,group:meta?.group||'Outros',type:meta?.type||''});meta=null}}return out}
-function classify(x){const s=norm(x.group+' '+x.name+' '+x.type+' '+x.url);if(/serie|series|episodio|temporada|s\d{1,2}e\d{1,3}|\/series\//.test(s))return'series';if(/filme|filmes|movie|movies|cinema|vod|\.mp4(?:$|\?)/.test(s))return'movies';return'live'}
-function render(){const q=norm($('search').value);const list=items.filter(x=>(area==='all'||classify(x)===area)&&(!q||norm(x.name+' '+x.group).includes(q)));$('channels').innerHTML='';if(!list.length){$('channels').innerHTML='<div class="hint">Nenhum conteúdo nesta seleção.</div>';return}for(const x of list){const b=document.createElement('button');b.className='item';const s=document.createElement('span');s.textContent=x.name;const small=document.createElement('small');small.textContent=x.group;s.appendChild(small);b.appendChild(s);b.onclick=()=>play(x);$('channels').appendChild(b)}status('Exibindo '+list.length+' de '+items.length+' conteúdos.')}
-function load(text,source){if(!String(text).replace(/^\uFEFF/,'').trimStart().startsWith('#EXTM3U'))throw Error('O conteúdo não começa com #EXTM3U.');items=parse(text);area='all';document.querySelectorAll('[data-area]').forEach(b=>b.classList.toggle('active',b.dataset.area==='all'));render();status(items.length+' conteúdos carregados de '+source+'.')}
-function play(x){const v=$('video');if(hls){hls.destroy();hls=null}if(window.tsPlayer){try{window.tsPlayer.pause();window.tsPlayer.unload();window.tsPlayer.detachMediaElement();window.tsPlayer.destroy()}catch{}window.tsPlayer=null}v.pause();v.removeAttribute('src');v.load();$('now').textContent='Selecionado: '+x.name;selectedUrl=x.url;status('Carregando: '+x.name);const url=x.url;const direct=/\\.(mp4|webm|mp3|aac|ogg|m4v|mov)(?:$|[?#])/i.test(url);const isTs=/\\.ts(?:$|[?#])/i.test(url)||/\\/(?:live|movie|series)\\/[^?#]*\\.ts(?:$|[?#])/i.test(url);const isHls=/\\.m3u8(?:$|[?#])/i.test(url);if(direct){v.src=url;v.load();v.play().then(()=>status('Reproduzindo: '+x.name)).catch(e=>status('Erro de reprodução direta: '+(e.message||e)+'; código MediaError '+(v.error?.code||'não disponível')));return}if(isTs&&window.mpegts&&mpegts.isSupported()){const player=mpegts.createPlayer({type:'mpegts',isLive:true,url:url},{enableWorker:true,lazyLoad:false,liveBufferLatencyChasing:true,stashInitialSize:128});window.tsPlayer=player;player.on(mpegts.Events.ERROR,(type,detail,info)=>status('Falha no fluxo TS: '+type+' / '+detail+(info&&info.code?' ('+info.code+')':'')+'. Endereço original mantido.'));player.attachMediaElement(v);player.load();player.play().then(()=>status('Reproduzindo fluxo TS: '+x.name)).catch(e=>status('Fluxo TS selecionado. Toque em ▶ para iniciar. '+(e.message||'')));return}if((isHls||!isTs)&&window.Hls&&Hls.isSupported()){hls=new Hls({enableWorker:true,lowLatencyMode:false,backBufferLength:90});hls.on(Hls.Events.MANIFEST_PARSED,()=>{status('Manifesto HLS carregado: '+x.name);v.play().then(()=>status('Reproduzindo: '+x.name)).catch(e=>status('Manifesto recebido. Toque em ▶ para iniciar. '+(e.message||'')))});hls.on(Hls.Events.ERROR,(_,d)=>{if(!d.fatal)return;const r=d.response||{};status('Erro HLS: '+d.details+'; tipo '+d.type+'; HTTP '+(r.code||'não informado')+'; MediaError '+(v.error?.code||'não disponível')+'. Verifique CORS, autorização, codec e disponibilidade do fluxo.')});hls.loadSource(url);hls.attachMedia(v);return}if(v.canPlayType('application/vnd.apple.mpegurl')){v.src=url;v.load();v.play().then(()=>status('Reproduzindo: '+x.name)).catch(e=>status('Falha na reprodução nativa: '+(e.message||e)+'; MediaError '+(v.error?.code||'não disponível')));return}status('Formato não suportado neste navegador. MediaError '+(v.error?.code||'não disponível')+'.')}$('file').onchange=async e=>{const f=e.target.files?.[0];if(f)try{load(await f.text(),f.name)}catch(err){status(err.message)}};$('loadRaw').onclick=()=>{try{load($('raw').value,'texto colado')}catch(e){status(e.message)}};$('loadUrl').onclick=async()=>{const u=$('url').value.trim();if(!u)return status('Informe a URL da playlist.');let p;try{p=new URL(u);if(!/^https?:$/.test(p.protocol))throw Error('Use uma URL HTTP/HTTPS.')}catch(e){return status('URL inválida: '+e.message)}const valid=(text)=>{const t=String(text).replace(/^\uFEFF/,'').trimStart();if(!t.startsWith('#EXTM3U'))throw Error('A resposta recebida não começa com #EXTM3U; pode ser uma página de erro/login.');return text};let directError='';status('Tentando ler a playlist diretamente no navegador...');try{const r=await fetch(p.href,{method:'GET',cache:'no-store'});if(!r.ok)throw Error('A origem respondeu HTTP '+r.status);const body=valid(await r.text());load(body,'URL lida diretamente pelo navegador');return}catch(e){directError=e&&e.message?e.message:String(e)}status('A leitura direta falhou ('+directError+'). Tentando o serviço auxiliar...');try{const r=await fetch(new URL('/api/m3u',location.origin),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:p.href})});const body=await r.text();if(!r.ok){let detail=body;try{const j=JSON.parse(body);detail=j.error||body;const lines=[];if(j.stage)lines.push('Etapa: '+j.stage);if(j.diagnosis){const d=j.diagnosis;if(d.cause)lines.push('Possível causa: '+d.cause);if(d.upstreamStatus)lines.push('Status real da origem: HTTP '+d.upstreamStatus+' '+(d.upstreamStatusText||''));if(d.upstreamHost)lines.push('Servidor de origem: '+d.upstreamHost);if(d.upstreamPath)lines.push('Caminho solicitado: '+d.upstreamPath);if(d.upstreamProtocol)lines.push('Protocolo: '+d.upstreamProtocol);if(d.requestProfile)lines.push('Perfil da requisição: '+d.requestProfile);if(d.errorName)lines.push('Tipo de erro: '+d.errorName);if(d.errorCode)lines.push('Código técnico: '+d.errorCode);if(d.errorMessage)lines.push('Mensagem técnica: '+d.errorMessage);if(d.responseHeaders)for(const [k,v] of Object.entries(d.responseHeaders))if(v)lines.push('Cabeçalho '+k+': '+v);if(d.responseExcerpt)lines.push('Trecho da resposta: '+d.responseExcerpt);if(Array.isArray(d.attempts)&&d.attempts.length){lines.push('Histórico das tentativas:');d.attempts.forEach(x=>lines.push('• '+x.profile+' #'+x.attempt+': '+(x.status?'HTTP '+x.status+' '+x.statusText:'erro de rede '+(x.errorCode||'')+' '+(x.networkError||''))+(x.server?' | servidor '+x.server:'')+(x.cfRay?' | Cloudflare '+x.cfRay:'')))}}detail+='\\n\\nFalha na leitura direta pelo navegador: '+directError;if(lines.length)detail+='\\n\\nDIAGNÓSTICO TÉCNICO\\n'+lines.join('\\n')}catch(parseError){detail+='\\n\\nFalha direta: '+directError+'\\nNão foi possível interpretar a resposta de erro em JSON: '+parseError.message+'\\nResposta recebida: '+body.slice(0,1200)}throw Error('Serviço auxiliar HTTP '+r.status+':\\n'+detail)}load(valid(body),'URL via serviço auxiliar CinePlayer Pro')}catch(e){status('Não foi possível carregar a playlist. Leitura direta: '+directError+'. Serviço auxiliar: '+e.message+'. Se o navegador indicar bloqueio de CORS e o serviço retornar HTTP 502/503, a origem precisa permitir acesso ao navegador ou o serviço auxiliar precisa conseguir acessá-la. Nenhum endereço alternativo foi inventado.')}};$('clear').onclick=()=>{items=[];if(hls){hls.destroy();hls=null}$('video').pause();$('video').removeAttribute('src');$('video').load();$('now').textContent='Nenhum conteúdo selecionado';render();status('Lista limpa.')};$('search').oninput=render;document.querySelectorAll('[data-area]').forEach(b=>b.onclick=()=>{area=b.dataset.area;document.querySelectorAll('[data-area]').forEach(z=>z.classList.toggle('active',z===b));render()});render();
-document.addEventListener('keydown',e=>{const tag=(e.target&&e.target.tagName||'').toLowerCase();if(['input','textarea','select'].includes(tag))return;if(e.key.toLowerCase()==='l'){$('file').click();return}if(items.length&&['ArrowDown','ArrowUp','Enter'].includes(e.key)){const visible=Array.from($('channels').querySelectorAll('button.item'));if(!visible.length)return;let idx=visible.findIndex(b=>b.dataset.active==='1');if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();idx=(idx+(e.key==='ArrowDown'?1:-1)+visible.length)%visible.length;visible.forEach(b=>b.dataset.active='0');visible[idx].dataset.active='1';visible[idx].focus();return}if(e.key==='Enter'&&document.activeElement&&document.activeElement.classList.contains('item')){document.activeElement.click();return}}const v=$('video');if(e.key===' '){e.preventDefault();v.paused?v.play():v.pause()}else if(e.key.toLowerCase()==='m'){v.muted=!v.muted}else if(e.key.toLowerCase()==='f'){if(!document.fullscreenElement){(v.requestFullscreen||v.webkitRequestFullscreen)?.call(v)}else{(document.exitFullscreen||document.webkitExitFullscreen)?.call(document)}}});
-})();
-</script></body></html>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script><script src="https://cdn.jsdelivr.net/npm/mpegts.js@1.8.0/dist/mpegts.js"></script><script>(function () {
+  function el(id) { return document.getElementById(id); }
+  var items = [], hls = null, tsPlayer = null, activeArea = "all";
+  function say(message) { el("status").textContent = message; }
+  function parseM3U(text) {
+    var lines = String(text || "").replace(/^\\uFEFF/, "").replace(/\\r/g, "").split("\\n");
+    var result = [], meta = null;
+    function attr(header, key) {
+      var re = new RegExp("(?:^|\\\\s)" + key + "\\\\s*=\\\\s*(?:\\\"([^\\\"]*)\\\"|'([^']*)'|([^\\\\s,]+))", "i");
+      var m = header.match(re);
+      return m ? (m[1] || m[2] || m[3] || "").trim() : "";
+    }
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i].trim();
+      if (!line) continue;
+      if (line.indexOf("#EXTM3U") === 0) continue;
+      if (line.indexOf("#EXTINF") === 0) {
+        var comma = line.indexOf(",");
+        var head = comma < 0 ? line : line.slice(0, comma);
+        meta = { name: comma < 0 ? "Conteúdo" : line.slice(comma + 1).trim(), group: attr(head, "group-title") || "Outros", type: attr(head, "tvg-type") || attr(head, "type") };
+      } else if (line.charAt(0) !== "#" && (line.indexOf("http://") === 0 || line.indexOf("https://") === 0)) {
+        result.push({ url: line, name: meta && meta.name ? meta.name : line, group: meta && meta.group ? meta.group : "Outros", type: meta && meta.type ? meta.type : "" });
+        meta = null;
+      }
+    }
+    return result;
+  }
+  function classify(x) {
+    var s = (x.group + " " + x.name + " " + x.type + " " + x.url).toLowerCase();
+    if (s.indexOf("serie") >= 0 || s.indexOf("series") >= 0 || s.indexOf("episodio") >= 0 || s.indexOf("/series/") >= 0) return "series";
+    if (s.indexOf("filme") >= 0 || s.indexOf("movie") >= 0 || s.indexOf("cinema") >= 0 || s.indexOf("vod") >= 0 || s.indexOf(".mp4") >= 0) return "movies";
+    return "live";
+  }
+  function render() {
+    var query = el("search").value.toLowerCase().trim(), root = el("channels"), count = 0;
+    root.innerHTML = "";
+    for (var i = 0; i < items.length; i++) {
+      var item = items[i];
+      if (activeArea !== "all" && classify(item) !== activeArea) continue;
+      if (query && (item.name + " " + item.group).toLowerCase().indexOf(query) < 0) continue;
+      var button = document.createElement("button"); button.type = "button"; button.className = "item";
+      var span = document.createElement("span"); span.textContent = item.name;
+      var small = document.createElement("small"); small.textContent = item.group; span.appendChild(small); button.appendChild(span);
+      button.addEventListener("click", (function (selected) { return function () { play(selected); }; })(item));
+      root.appendChild(button); count++;
+    }
+    if (!count) root.innerHTML = '<div class="hint">Nenhum conteúdo nesta seleção.</div>';
+    say(count ? "Exibindo " + count + " de " + items.length + " conteúdos." : "Nenhum conteúdo encontrado.");
+  }
+  function loadText(text, source) {
+    if (String(text).replace(/^\\uFEFF/, "").trim().indexOf("#EXTM3U") !== 0) throw new Error("O conteúdo não começa com #EXTM3U.");
+    items = parseM3U(text); activeArea = "all";
+    var filters = document.querySelectorAll("[data-area]");
+    for (var i = 0; i < filters.length; i++) filters[i].classList.toggle("active", filters[i].getAttribute("data-area") === "all");
+    render(); say(items.length + " conteúdos carregados de " + source + ".");
+  }
+  function stopPlayers() {
+    if (hls) { hls.destroy(); hls = null; }
+    if (tsPlayer) { try { tsPlayer.pause(); tsPlayer.unload(); tsPlayer.detachMediaElement(); tsPlayer.destroy(); } catch (e) {} tsPlayer = null; }
+  }
+  function play(item) {
+    var video = el("video"); stopPlayers(); video.pause(); video.removeAttribute("src"); video.load();
+    el("now").textContent = "Selecionado: " + item.name; say("Carregando: " + item.name);
+    var url = item.url;
+    if (url.indexOf(".mp4") >= 0 || url.indexOf(".webm") >= 0 || url.indexOf(".mp3") >= 0) {
+      video.src = url; video.load();
+      video.play().then(function () { say("Reproduzindo: " + item.name); }).catch(function (e) { say("Erro de reprodução: " + e.message + "; MediaError " + (video.error ? video.error.code : "indisponível")); }); return;
+    }
+    if (url.indexOf(".ts") >= 0 && window.mpegts && window.mpegts.isSupported()) {
+      tsPlayer = window.mpegts.createPlayer({ type: "mpegts", isLive: true, url: url }, { enableWorker: true, lazyLoad: false });
+      tsPlayer.on(window.mpegts.Events.ERROR, function (type, detail) { say("Erro no fluxo TS: " + type + " / " + detail); });
+      tsPlayer.attachMediaElement(video); tsPlayer.load();
+      tsPlayer.play().catch(function (e) { say("Fluxo TS selecionado. Toque em reproduzir. " + e.message); }); return;
+    }
+    if (window.Hls && window.Hls.isSupported()) {
+      hls = new window.Hls();
+      hls.on(window.Hls.Events.MANIFEST_PARSED, function () { say("Playlist carregada: " + item.name); video.play().then(function () { say("Reproduzindo: " + item.name); }).catch(function (e) { say("Toque em reproduzir para iniciar. " + e.message); }); });
+      hls.on(window.Hls.Events.ERROR, function (_, data) { if (data.fatal) say("Erro HLS: " + data.details + "; HTTP " + (data.response ? data.response.code : "não informado") + ". Verifique endereço, CORS e disponibilidade."); });
+      hls.loadSource(url); hls.attachMedia(video); return;
+    }
+    if (video.canPlayType("application/vnd.apple.mpegurl")) { video.src = url; video.load(); video.play().catch(function (e) { say("Erro de reprodução: " + e.message); }); }
+    else say("Formato não suportado neste navegador.");
+  }
+  el("file").addEventListener("change", function (event) {
+    var file = event.target.files && event.target.files[0]; if (!file) return;
+    var reader = new FileReader(); reader.onload = function () { try { loadText(reader.result, file.name); } catch (e) { say("Erro ao ler arquivo: " + e.message); } };
+    reader.onerror = function () { say("Não foi possível ler o arquivo."); }; reader.readAsText(file);
+  });
+  el("loadRaw").addEventListener("click", function () { try { loadText(el("raw").value, "texto colado"); } catch (e) { say("Erro: " + e.message); } });
+  el("loadUrl").addEventListener("click", async function () {
+    var url = el("url").value.trim(); if (!url) { say("Informe a URL da playlist."); return; }
+    if (url.indexOf("http://") !== 0 && url.indexOf("https://") !== 0) { say("URL inválida. Use http:// ou https://."); return; }
+    say("Tentando carregar a URL...");
+    try { var response = await fetch(url, { cache: "no-store" }); if (!response.ok) throw new Error("HTTP " + response.status); loadText(await response.text(), "URL"); }
+    catch (e) { say("Não foi possível carregar a URL: " + e.message + ". Pode ser CORS ou falha no servidor. Tente arquivo M3U ou colar o conteúdo."); }
+  });
+  el("clear").addEventListener("click", function () {
+    items = []; stopPlayers(); var video = el("video"); video.pause(); video.removeAttribute("src"); video.load();
+    el("now").textContent = "Nenhum conteúdo selecionado"; el("channels").innerHTML = '<div class="hint">Nenhuma lista carregada.</div>'; say("Lista limpa.");
+  });
+  el("search").addEventListener("input", render);
+  var filters = document.querySelectorAll("[data-area]");
+  for (var i = 0; i < filters.length; i++) filters[i].addEventListener("click", function () {
+    activeArea = this.getAttribute("data-area"); for (var j = 0; j < filters.length; j++) filters[j].classList.toggle("active", filters[j] === this); render();
+  });
+  document.addEventListener("keydown", function (event) {
+    var tag = event.target && event.target.tagName ? event.target.tagName.toLowerCase() : "";
+    if (tag === "input" || tag === "textarea" || tag === "select") return;
+    if (event.key.toLowerCase() === "l") el("file").click();
+    if (event.key.toLowerCase() === "m") el("video").muted = !el("video").muted;
+  });
+})();</script></body></html>
