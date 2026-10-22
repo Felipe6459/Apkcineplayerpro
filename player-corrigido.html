@@ -178,6 +178,19 @@ footer{padding:12px;text-align:center;color:var(--muted);font-size:.8rem}
       const body=await response.text();
       if(!response.ok){
         let detail=body;try{const json=JSON.parse(body);detail=json.error||json.message||body;const d=json.diagnosis;if(d){const h=d.responseHeaders||{};const parts=[];if(d.cause)parts.push("causa: "+d.cause);if(d.upstreamStatus)parts.push("origem HTTP "+d.upstreamStatus);if(d.upstreamHost)parts.push("servidor: "+d.upstreamHost);if(d.upstreamProtocol)parts.push("protocolo: "+d.upstreamProtocol);if(d.requestProfile)parts.push("perfil: "+d.requestProfile);if(h.server)parts.push("Server: "+h.server);if(h["cf-mitigated"])parts.push("CF-Mitigated: "+h["cf-mitigated"]);if(h["cf-ray"])parts.push("CF-Ray: "+h["cf-ray"]);if(h["content-type"])parts.push("Content-Type: "+h["content-type"]);if(d.errorCode)parts.push("código: "+d.errorCode);if(d.errorName)parts.push("tipo: "+d.errorName);if(d.responseExcerpt)parts.push("resposta: "+d.responseExcerpt);if(Array.isArray(d.attempts)&&d.attempts.length)parts.push("tentativas: "+d.attempts.map(a=>a.profile+"="+(a.status||a.errorCode||a.networkError||"sem status")).join(", "));if(parts.length)detail+=" | Diagnóstico: "+parts.join(" | ");}}catch(e){}
+        if(response.status===503){
+          try{
+            say("O serviço auxiliar recebeu 503. Testando agora o acesso direto do navegador à playlist…");
+            const direct=await fetch(url,{method:"GET",cache:"no-store",headers:{"Accept":"application/vnd.apple.mpegurl, audio/x-mpegurl, text/plain, */*"}});
+            const directBody=await direct.text();
+            if(!direct.ok)throw new Error("acesso direto respondeu HTTP "+direct.status);
+            if(!directBody.trimStart().replace(/^\\uFEFF/,"").startsWith("#EXTM3U"))throw new Error("acesso direto não retornou uma playlist M3U válida");
+            parseChannelList(directBody);say(channels.length+" conteúdos carregados diretamente do navegador (sem o serviço auxiliar).");return;
+          }catch(directError){
+            const directMessage=directError&&directError.message?directError.message:"falha de rede/CORS";
+            detail+=" | Teste direto no navegador também falhou: "+directMessage+". Se mencionar CORS, o servidor precisa permitir acesso do navegador ou será necessário um proxy autorizado.";
+          }
+        }
         throw new Error("HTTP "+response.status+": "+detail.slice(0,1800));
       }
       if(!body.trimStart().replace(/^\uFEFF/,"").startsWith("#EXTM3U"))throw new Error("O serviço respondeu, mas o conteúdo não começa com #EXTM3U. Resposta: "+body.slice(0,180));
