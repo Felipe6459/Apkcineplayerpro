@@ -184,7 +184,7 @@ footer{padding:12px;text-align:center;color:var(--muted);font-size:.8rem}
             const direct=await fetch(url,{method:"GET",cache:"no-store",headers:{"Accept":"application/vnd.apple.mpegurl, audio/x-mpegurl, text/plain, */*"}});
             const directBody=await direct.text();
             if(!direct.ok)throw new Error("acesso direto respondeu HTTP "+direct.status);
-            if(!directBody.trimStart().replace(/^\\uFEFF/,"").startsWith("#EXTM3U"))throw new Error("acesso direto não retornou uma playlist M3U válida");
+            if(!directBody.trimStart().replace(/^\uFEFF/,"").startsWith("#EXTM3U"))throw new Error("acesso direto não retornou uma playlist M3U válida");
             parseChannelList(directBody);say(channels.length+" conteúdos carregados diretamente do navegador (sem o serviço auxiliar).");return;
           }catch(directError){
             const directMessage=directError&&directError.message?directError.message:"falha de rede/CORS";
