@@ -1,126 +1,224 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#100b18">
-<title>CinePlayer Pro — Player corrigido</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#100b18">
+<title>CinePlayer Pro</title>
 <style>
-:root{color-scheme:dark;--bg:#100b18;--panel:#1b1228;--violet:#a855f7;--text:#f8f5ff;--muted:#c5b9d5;--border:#43265d}*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at top,#2a1640,var(--bg) 58%);color:var(--text);font-family:system-ui,sans-serif}header{padding:16px;border-bottom:1px solid var(--border)}h1{font-size:1.2rem;margin:0}main{max-width:1050px;margin:auto;padding:14px;display:grid;gap:12px}.panel{background:#1b1228ed;border:1px solid var(--border);border-radius:15px;padding:14px;min-width:0}h2{font-size:1rem;margin:0 0 10px}input,button,textarea{font:inherit;border:1px solid #55366f;border-radius:9px;padding:10px;background:#120d1b;color:var(--text);max-width:100%}input,textarea{width:100%;margin:5px 0 10px}button{background:#6d28a8;cursor:pointer;font-weight:650}.row{display:flex;gap:8px;flex-wrap:wrap}.row>*{flex:1}video{width:100%;max-height:55vh;aspect-ratio:16/9;background:#050407;border-radius:10px}.hint{font-size:.82rem;color:var(--muted);line-height:1.5}.status{padding:10px;background:#251633;border-left:3px solid var(--violet);border-radius:8px;overflow-wrap:anywhere;font-size:.86rem}.channels{display:grid;gap:7px;max-height:55vh;overflow:auto}.item{display:flex;gap:8px;align-items:center;text-align:left;background:#241732;border:1px solid #402752;border-radius:10px;padding:10px}.item span{flex:1;min-width:0;overflow-wrap:anywhere}.item small{display:block;color:var(--muted)}.filters{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}.filters button{padding:7px 9px}.filters .active{background:#9333ea}@media(min-width:780px){main{grid-template-columns:1fr 1fr}.source{grid-column:1}.player{grid-column:1}.list{grid-column:2;grid-row:1/span 2}}
-</style></head><body>
-<header><h1>▶ CinePlayer Pro</h1><div class="hint">Baseado no projeto aberto IPTV-Web-Player, adaptado para manter importação por arquivo, URL e texto M3U · HLS.js</div><div class="hint">Controles: ↑/↓ canais · Enter reproduzir · Espaço pausar · M silenciar · F tela cheia · L carregar arquivo</div></header>
-<main>
-<section class="panel source"><h2>1. Carregar lista M3U</h2><label for="file">Arquivo M3U/M3U8 no celular</label><input id="file" type="file" accept=".m3u,.m3u8,.txt"><label for="url">Ou URL pública da playlist</label><input id="url" type="url" placeholder="https://servidor/lista.m3u"><div class="row"><button id="loadUrl">Carregar URL</button><button id="clear">Limpar</button></div><label for="raw">Ou colar conteúdo M3U</label><textarea id="raw" rows="4" placeholder="#EXTM3U&#10;#EXTINF:-1 group-title=&quot;Canais&quot;,Nome&#10;https://servidor/canal.m3u8"></textarea><button id="loadRaw">Ler conteúdo</button><p class="hint">URLs de playlist podem ser bloqueadas por CORS. Use apenas conteúdo autorizado.</p><div id="status" class="status">Carregue uma playlist para começar.</div></section>
-<section class="panel player"><h2>2. Reprodução</h2><video id="video" controls playsinline preload="metadata"></video><div id="now">Nenhum conteúdo selecionado</div><p class="hint">Importante: esta versão não troca automaticamente /live/ID.ts por /m3u8 nem força HTTPS, pois isso pode mudar o endereço do conteúdo selecionado.</p></section>
-<section class="panel list"><h2>3. Conteúdos</h2><input id="search" type="search" placeholder="Pesquisar canal, filme ou série"><div class="filters" id="filters"><button class="active" data-area="all">Todos</button><button data-area="live">TV ao vivo</button><button data-area="movies">Filmes</button><button data-area="series">Séries</button></div><div id="channels" class="channels"><div class="hint">Nenhuma lista carregada.</div></div></section>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{color-scheme:dark;--bg:#100b18;--panel:#1b1228;--violet:#a855f7;--text:#f8f5ff;--muted:#c5b9d5;--border:#43265d}
+body{font-family:system-ui,Arial,sans-serif;background:radial-gradient(ellipse at top,#2a1640,var(--bg) 58%);color:var(--text);min-height:100vh}
+header{background:#160e21;padding:15px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;text-align:center}
+header h1{font-size:1.25rem}header .hint{width:100%}
+.hint{font-size:.82rem;color:var(--muted);line-height:1.5}
+.file-input{background:#171020;padding:14px;border-bottom:1px solid var(--border);display:grid;gap:9px}
+input,button,textarea{font:inherit;border:1px solid #55366f;border-radius:9px;padding:10px;background:#120d1b;color:var(--text);max-width:100%}
+input,textarea{width:100%;min-width:0}
+button{background:#6d28a8;cursor:pointer;font-weight:650}
+button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid #d8b4fe;outline-offset:2px}
+.row{display:flex;gap:8px;flex-wrap:wrap}.row>*{flex:1}
+.main-container{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(260px,1fr);gap:12px;padding:12px;max-width:1400px;margin:auto}
+.player-container{position:relative;background:#050407;border:1px solid var(--border);border-radius:13px;overflow:hidden;min-height:220px;display:flex;align-items:center;justify-content:center}
+.player-container video{display:block;width:100%;max-height:62vh;aspect-ratio:16/9;background:#050407}
+.spinner-overlay{position:absolute;inset:0;background:#0009;display:none;align-items:center;justify-content:center;z-index:2;pointer-events:none}
+.spinner{border:6px solid #f3e8ff;border-top-color:var(--violet);border-radius:50%;width:48px;height:48px;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.player-panel,.channel-list{background:#1b1228ed;border:1px solid var(--border);border-radius:13px;padding:12px;min-width:0}
+.player-panel h2,.channel-list h2{font-size:1rem;margin-bottom:10px}
+#now{padding:10px 0;overflow-wrap:anywhere}
+.status{margin-top:8px;padding:10px;background:#251633;border-left:3px solid var(--violet);border-radius:8px;overflow-wrap:anywhere;font-size:.86rem}
+.channel-list{grid-column:2;grid-row:1 / span 2;max-height:calc(100vh - 25px);overflow:auto}
+#channelsContainer{display:grid;gap:6px;margin-top:9px}
+.channel{display:block;width:100%;padding:10px;text-align:left;background:#241732;border:1px solid #402752;border-radius:9px;overflow-wrap:anywhere;font-weight:500}
+.channel small{display:block;color:var(--muted);font-size:.78rem;margin-top:3px}
+.channel:hover,.channel.selected{background:#573079;border-color:#a855f7}
+.filters{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}.filters button{padding:7px 9px;font-size:.85rem}.filters .active{background:#9333ea;border-color:#d8b4fe}
+footer{padding:12px;text-align:center;color:var(--muted);font-size:.8rem}
+@media(max-width:760px){.main-container{display:flex;flex-direction:column}.channel-list{order:3;max-height:none}.player-container{min-height:0}.player-container video{max-height:48vh}.file-input{padding:12px}}
+</style>
+</head>
+<body>
+<header>
+<h1>▶ CinePlayer Pro</h1>
+<div class="hint">Recriado a partir da estrutura e da lógica do projeto aberto IPTV-Web-Player (Bocaletto Luca), adaptado para CinePlayer Pro.</div>
+<div class="hint">Teclas: ↑/↓ navegar · Enter reproduzir · Espaço pausar · +/- volume · M silenciar · F tela cheia · P PiP · L carregar arquivo</div>
+</header>
+<section class="file-input">
+<strong>1. Carregar lista M3U</strong>
+<label for="m3uFile">Arquivo M3U/M3U8 no celular</label>
+<input type="file" id="m3uFile" accept=".m3u,.m3u8,.txt">
+<label for="playlistUrl">Ou URL da playlist</label>
+<input type="url" id="playlistUrl" placeholder="https://servidor/lista.m3u" autocomplete="url">
+<div class="row"><button id="loadUrl" type="button">Carregar URL</button><button id="clearList" type="button">Limpar lista</button></div>
+<label for="playlistText">Ou colar conteúdo M3U</label>
+<textarea id="playlistText" rows="4" placeholder="#EXTM3U&#10;#EXTINF:-1 group-title=&quot;Canais&quot;,Nome&#10;https://servidor/canal.m3u8"></textarea>
+<button id="loadText" type="button">Ler conteúdo</button>
+<p class="hint">Use apenas playlists e conteúdos para os quais você tenha autorização. A importação por URL usa o endpoint da própria aplicação; servidores indisponíveis ou que exijam autenticação ainda podem falhar.</p>
+<div id="status" class="status" role="status" aria-live="polite">Carregue uma playlist para começar.</div>
+</section>
+<main class="main-container">
+<section class="player-panel">
+<h2>2. Reprodução</h2>
+<div class="player-container">
+<div class="spinner-overlay" id="spinner"><div class="spinner"></div></div>
+<video id="videoPlayer" controls playsinline preload="metadata"></video>
+</div>
+<div id="now">Nenhum conteúdo selecionado</div>
+</section>
+<aside class="channel-list" id="channelList">
+<h2>3. Conteúdos</h2>
+<input id="search" type="search" placeholder="Pesquisar canal, filme ou série" aria-label="Pesquisar conteúdo">
+<div class="filters" id="filters">
+<button type="button" class="active" data-area="all">Todos</button><button type="button" data-area="live">TV ao vivo</button><button type="button" data-area="movies">Filmes</button><button type="button" data-area="series">Séries</button>
+</div>
+<div id="channelsContainer"><div class="hint">Nenhuma lista carregada.</div></div>
+</aside>
 </main>
-<script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script><script src="https://cdn.jsdelivr.net/npm/mpegts.js@1.8.0/dist/mpegts.js"></script><script>(function () {
-  function el(id) { return document.getElementById(id); }
-  var items = [], hls = null, tsPlayer = null, activeArea = "all";
-  function say(message) { el("status").textContent = message; }
-  function parseM3U(text) {
-    var lines = String(text || "").replace(/^\\uFEFF/, "").replace(/\\r/g, "").split("\\n");
-    var result = [], meta = null;
-    function attr(header, key) {
-      var re = new RegExp("(?:^|\\\\s)" + key + "\\\\s*=\\\\s*(?:\\\"([^\\\"]*)\\\"|'([^']*)'|([^\\\\s,]+))", "i");
-      var m = header.match(re);
-      return m ? (m[1] || m[2] || m[3] || "").trim() : "";
-    }
-    for (var i = 0; i < lines.length; i++) {
-      var line = lines[i].trim();
-      if (!line) continue;
-      if (line.indexOf("#EXTM3U") === 0) continue;
-      if (line.indexOf("#EXTINF") === 0) {
-        var comma = line.indexOf(",");
-        var head = comma < 0 ? line : line.slice(0, comma);
-        meta = { name: comma < 0 ? "Conteúdo" : line.slice(comma + 1).trim(), group: attr(head, "group-title") || "Outros", type: attr(head, "tvg-type") || attr(head, "type") };
-      } else if (line.charAt(0) !== "#" && (line.indexOf("http://") === 0 || line.indexOf("https://") === 0)) {
-        result.push({ url: line, name: meta && meta.name ? meta.name : line, group: meta && meta.group ? meta.group : "Outros", type: meta && meta.type ? meta.type : "" });
-        meta = null;
-      }
-    }
-    return result;
-  }
-  function classify(x) {
-    var s = (x.group + " " + x.name + " " + x.type + " " + x.url).toLowerCase();
-    if (s.indexOf("serie") >= 0 || s.indexOf("series") >= 0 || s.indexOf("episodio") >= 0 || s.indexOf("/series/") >= 0) return "series";
-    if (s.indexOf("filme") >= 0 || s.indexOf("movie") >= 0 || s.indexOf("cinema") >= 0 || s.indexOf("vod") >= 0 || s.indexOf(".mp4") >= 0) return "movies";
+<footer>CinePlayer Pro · Baseado no IPTV-Web-Player, de Bocaletto Luca · Projeto de origem sob licença GPLv3</footer>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mpegts.js@1.8.0/mpegts.js"></script>
+<script>
+/* Adaptacao do core.js do IPTV-Web-Player: playChannel, parseChannelList,
+   selecao por teclado e gamepad; extensoes CinePlayer para URL/texto e categorias. */
+(function(){
+  const video=document.getElementById("videoPlayer");
+  const spinner=document.getElementById("spinner");
+  const channelsContainer=document.getElementById("channelsContainer");
+  const fileInput=document.getElementById("m3uFile");
+  const statusBox=document.getElementById("status");
+  let hls=null,tsPlayer=null,channels=[],currentSelectedIndex=-1,activeArea="all";
+  function say(message){statusBox.textContent=message;}
+  function showSpinner(show=true){spinner.style.display=show?"flex":"none";}
+  function classify(item){
+    const s=(item.group+" "+item.title+" "+item.type+" "+item.url).toLowerCase();
+    if(/series|serie|série|episodio|episódio|temporada|season|\/series\//.test(s))return "series";
+    if(/filme|movie|cinema|vod|\/movie\/|\.mp4(?:$|\?)/.test(s))return "movies";
     return "live";
   }
-  function render() {
-    var query = el("search").value.toLowerCase().trim(), root = el("channels"), count = 0;
-    root.innerHTML = "";
-    for (var i = 0; i < items.length; i++) {
-      var item = items[i];
-      if (activeArea !== "all" && classify(item) !== activeArea) continue;
-      if (query && (item.name + " " + item.group).toLowerCase().indexOf(query) < 0) continue;
-      var button = document.createElement("button"); button.type = "button"; button.className = "item";
-      var span = document.createElement("span"); span.textContent = item.name;
-      var small = document.createElement("small"); small.textContent = item.group; span.appendChild(small); button.appendChild(span);
-      button.addEventListener("click", (function (selected) { return function () { play(selected); }; })(item));
-      root.appendChild(button); count++;
-    }
-    if (!count) root.innerHTML = '<div class="hint">Nenhum conteúdo nesta seleção.</div>';
-    say(count ? "Exibindo " + count + " de " + items.length + " conteúdos." : "Nenhum conteúdo encontrado.");
+  function parseChannelList(content){
+    const lines=String(content||"").replace(/^\uFEFF/,"").replace(/\r/g,"").split("\n");
+    const parsed=[];let current=null;
+    function attr(header,key){const re=new RegExp("(?:^|\\s)"+key+"\\s*=\\s*(?:\"([^\"]*)\"|'([^']*)'|([^\\s,]+))","i");const m=header.match(re);return m?(m[1]||m[2]||m[3]||"").trim():"";}
+    lines.forEach(line=>{
+      line=line.trim();if(!line)return;
+      if(line.startsWith("#EXTINF")){
+        const comma=line.indexOf(","),head=comma<0?line:line.slice(0,comma);
+        current={title:comma<0?"Conteúdo":line.slice(comma+1).trim(),group:attr(head,"group-title")||"Outros",type:attr(head,"tvg-type")||attr(head,"type")||"",url:""};
+      }else if(line.startsWith("#EXTGRP:")){if(current)current.group=line.slice(8).trim()||current.group;}
+      else if(!line.startsWith("#")&&/^https?:\/\//i.test(line)){
+        parsed.push({title:current&&current.title?current.title:line,group:current&&current.group?current.group:"Outros",type:current&&current.type?current.type:"",url:line});
+        current=null;
+      }
+    });
+    channels=parsed;currentSelectedIndex=-1;activeArea="all";
+    document.querySelectorAll("[data-area]").forEach(b=>b.classList.toggle("active",b.dataset.area==="all"));
+    renderChannels();
+    say("Lista lida: "+channels.length+" conteúdos.");
+    if(!channels.length)say("Nenhum endereço HTTP/HTTPS encontrado. Confira se o arquivo contém entradas #EXTINF seguidas dos endereços.");
   }
-  function loadText(text, source) {
-    if (String(text).replace(/^\\uFEFF/, "").trim().indexOf("#EXTM3U") !== 0) throw new Error("O conteúdo não começa com #EXTM3U.");
-    items = parseM3U(text); activeArea = "all";
-    var filters = document.querySelectorAll("[data-area]");
-    for (var i = 0; i < filters.length; i++) filters[i].classList.toggle("active", filters[i].getAttribute("data-area") === "all");
-    render(); say(items.length + " conteúdos carregados de " + source + ".");
+  function renderChannels(){
+    channelsContainer.innerHTML="";const query=document.getElementById("search").value.trim().toLowerCase();let visible=0;const visibleItems=[];
+    channels.forEach(item=>{if(activeArea!=="all"&&classify(item)!==activeArea)return;if(query&&!(item.title+" "+item.group).toLowerCase().includes(query))return;visibleItems.push(item);});
+    visibleItems.forEach(item=>{
+      const button=document.createElement("button");button.type="button";button.className="channel";button.dataset.url=item.url;
+      const title=document.createElement("span");title.textContent=item.title;const group=document.createElement("small");group.textContent=item.group;title.appendChild(group);button.appendChild(title);
+      button.addEventListener("click",()=>{currentSelectedIndex=visibleItems.indexOf(item);updateSelection();playChannel(item);});
+      channelsContainer.appendChild(button);visible++;
+    });
+    if(!visible)channelsContainer.innerHTML='<div class="hint">'+(channels.length?"Nenhum conteúdo nesta seleção.":"Nenhuma lista carregada.")+"</div>";
+    const count=channels.length;say(count?("Exibindo "+visible+" de "+count+" conteúdos."):"Nenhuma lista carregada.");
   }
-  function stopPlayers() {
-    if (hls) { hls.destroy(); hls = null; }
-    if (tsPlayer) { try { tsPlayer.pause(); tsPlayer.unload(); tsPlayer.detachMediaElement(); tsPlayer.destroy(); } catch (e) {} tsPlayer = null; }
+  function updateSelection(){
+    const buttons=Array.from(channelsContainer.querySelectorAll(".channel"));
+    buttons.forEach((button,index)=>{button.classList.toggle("selected",index===currentSelectedIndex);if(index===currentSelectedIndex)button.scrollIntoView({behavior:"smooth",block:"nearest"});});
   }
-  function play(item) {
-    var video = el("video"); stopPlayers(); video.pause(); video.removeAttribute("src"); video.load();
-    el("now").textContent = "Selecionado: " + item.name; say("Carregando: " + item.name);
-    var url = item.url;
-    if (url.indexOf(".mp4") >= 0 || url.indexOf(".webm") >= 0 || url.indexOf(".mp3") >= 0) {
-      video.src = url; video.load();
-      video.play().then(function () { say("Reproduzindo: " + item.name); }).catch(function (e) { say("Erro de reprodução: " + e.message + "; MediaError " + (video.error ? video.error.code : "indisponível")); }); return;
-    }
-    if (url.indexOf(".ts") >= 0 && window.mpegts && window.mpegts.isSupported()) {
-      tsPlayer = window.mpegts.createPlayer({ type: "mpegts", isLive: true, url: url }, { enableWorker: true, lazyLoad: false });
-      tsPlayer.on(window.mpegts.Events.ERROR, function (type, detail) { say("Erro no fluxo TS: " + type + " / " + detail); });
-      tsPlayer.attachMediaElement(video); tsPlayer.load();
-      tsPlayer.play().catch(function (e) { say("Fluxo TS selecionado. Toque em reproduzir. " + e.message); }); return;
-    }
-    if (window.Hls && window.Hls.isSupported()) {
-      hls = new window.Hls();
-      hls.on(window.Hls.Events.MANIFEST_PARSED, function () { say("Playlist carregada: " + item.name); video.play().then(function () { say("Reproduzindo: " + item.name); }).catch(function (e) { say("Toque em reproduzir para iniciar. " + e.message); }); });
-      hls.on(window.Hls.Events.ERROR, function (_, data) { if (data.fatal) say("Erro HLS: " + data.details + "; HTTP " + (data.response ? data.response.code : "não informado") + ". Verifique endereço, CORS e disponibilidade."); });
-      hls.loadSource(url); hls.attachMedia(video); return;
-    }
-    if (video.canPlayType("application/vnd.apple.mpegurl")) { video.src = url; video.load(); video.play().catch(function (e) { say("Erro de reprodução: " + e.message); }); }
-    else say("Formato não suportado neste navegador.");
+  function stopPlayers(){
+    if(hls){hls.destroy();hls=null;}
+    if(tsPlayer){try{tsPlayer.pause();tsPlayer.unload();tsPlayer.detachMediaElement();tsPlayer.destroy();}catch(e){}tsPlayer=null;}
   }
-  el("file").addEventListener("change", function (event) {
-    var file = event.target.files && event.target.files[0]; if (!file) return;
-    var reader = new FileReader(); reader.onload = function () { try { loadText(reader.result, file.name); } catch (e) { say("Erro ao ler arquivo: " + e.message); } };
-    reader.onerror = function () { say("Não foi possível ler o arquivo."); }; reader.readAsText(file);
+  function playChannel(item){
+    showSpinner(true);stopPlayers();video.pause();video.removeAttribute("src");video.load();
+    document.getElementById("now").textContent="Selecionado: "+item.title;say("Carregando conteúdo: "+item.title);
+    const url=item.url;
+    if(/\.(mp4|webm|mp3|ogg)(?:$|\?)/i.test(url)){
+      video.src=url;video.load();video.play().then(()=>{showSpinner(false);say("Reproduzindo: "+item.title);}).catch(err=>{showSpinner(false);say("Erro de reprodução: "+err.message+"; MediaError "+(video.error?video.error.code:"indisponível"));});return;
+    }
+    if(/\.ts(?:$|\?)/i.test(url)&&window.mpegts&&window.mpegts.isSupported()){
+      tsPlayer=window.mpegts.createPlayer({type:"mpegts",isLive:true,url:url},{enableWorker:true,lazyLoad:false});
+      tsPlayer.on(window.mpegts.Events.ERROR,(type,detail,info)=>{showSpinner(false);say("Erro no fluxo TS: "+type+" / "+detail+(info&&info.msg?" — "+info.msg:""));});
+      tsPlayer.attachMediaElement(video);tsPlayer.load();tsPlayer.play().then(()=>showSpinner(false)).catch(err=>{showSpinner(false);say("Fluxo TS selecionado. Toque em reproduzir. "+err.message);});return;
+    }
+    if(window.Hls&&window.Hls.isSupported()){
+      hls=new window.Hls({enableWorker:true});hls.loadSource(url);hls.attachMedia(video);
+      hls.once(window.Hls.Events.MANIFEST_PARSED,()=>{video.play().then(()=>{showSpinner(false);say("Reproduzindo: "+item.title);}).catch(err=>{showSpinner(false);say("Manifesto carregado. Toque em reproduzir se o navegador bloquear início automático. "+err.message);});});
+      hls.on(window.Hls.Events.ERROR,(_,data)=>{if(data.fatal){showSpinner(false);const code=data.response&&data.response.code?data.response.code:"não informado";say("Erro HLS fatal: "+data.type+" / "+data.details+"; HTTP "+code+". Verifique o endereço do fluxo, CORS e disponibilidade da origem.");}});
+    }else if(video.canPlayType("application/vnd.apple.mpegurl")){
+      video.src=url;video.play().then(()=>{showSpinner(false);say("Reproduzindo: "+item.title);}).catch(err=>{showSpinner(false);say("Erro no player nativo: "+err.message);});
+    }else{showSpinner(false);say("Este navegador não oferece suporte à reprodução HLS.");}
+  }
+  function readFile(file){
+    if(!file)return;const reader=new FileReader();
+    reader.onload=e=>{try{parseChannelList(e.target.result);say(channels.length+" conteúdos carregados do arquivo "+file.name+".");}catch(err){say("Erro ao ler arquivo: "+err.message);}};
+    reader.onerror=()=>say("Não foi possível ler o arquivo selecionado.");reader.readAsText(file);
+  }
+  fileInput.addEventListener("change",event=>readFile(event.target.files&&event.target.files[0]));
+  document.getElementById("loadText").addEventListener("click",()=>{
+    const text=document.getElementById("playlistText").value;
+    if(!text.trim()){say("Cole o conteúdo M3U antes de tocar em Ler conteúdo.");return;}
+    if(!text.replace(/^\uFEFF/,"").trimStart().startsWith("#EXTM3U")){say("O texto não começa com #EXTM3U. Cole uma playlist M3U válida.");return;}
+    parseChannelList(text);
   });
-  el("loadRaw").addEventListener("click", function () { try { loadText(el("raw").value, "texto colado"); } catch (e) { say("Erro: " + e.message); } });
-  el("loadUrl").addEventListener("click", async function () {
-    var url = el("url").value.trim(); if (!url) { say("Informe a URL da playlist."); return; }
-    if (url.indexOf("http://") !== 0 && url.indexOf("https://") !== 0) { say("URL inválida. Use http:// ou https://."); return; }
-    say("Tentando carregar a URL...");
-    try { var response = await fetch(url, { cache: "no-store" }); if (!response.ok) throw new Error("HTTP " + response.status); loadText(await response.text(), "URL"); }
-    catch (e) { say("Não foi possível carregar a URL: " + e.message + ". Pode ser CORS ou falha no servidor. Tente arquivo M3U ou colar o conteúdo."); }
+  document.getElementById("loadUrl").addEventListener("click",async()=>{
+    const url=document.getElementById("playlistUrl").value.trim();
+    if(!/^https?:\/\//i.test(url)){say("Informe uma URL válida iniciada por http:// ou https://.");return;}
+    const button=document.getElementById("loadUrl");button.disabled=true;say("Carregando playlist pelo serviço da aplicação…");
+    try{
+      const response=await fetch("/api/m3u",{method:"POST",headers:{"Content-Type":"application/json","Accept":"text/plain, application/x-mpegURL, application/json"},body:JSON.stringify({url})});
+      const body=await response.text();
+      if(!response.ok){
+        let detail=body;try{const json=JSON.parse(body);detail=json.error||json.message||body;if(json.diagnosis&&json.diagnosis.upstreamStatus)detail+=" (origem HTTP "+json.diagnosis.upstreamStatus+")";}catch(e){}
+        throw new Error("HTTP "+response.status+": "+detail.slice(0,700));
+      }
+      if(!body.trimStart().replace(/^\uFEFF/,"").startsWith("#EXTM3U"))throw new Error("O serviço respondeu, mas o conteúdo não começa com #EXTM3U. Resposta: "+body.slice(0,180));
+      parseChannelList(body);say(channels.length+" conteúdos carregados pela URL.");
+    }catch(err){say("Falha ao importar URL: "+err.message+". Se a origem estiver indisponível, exigir autenticação ou retornar erro HTTP, o player não conseguirá carregar a lista.");}
+    finally{button.disabled=false;}
   });
-  el("clear").addEventListener("click", function () {
-    items = []; stopPlayers(); var video = el("video"); video.pause(); video.removeAttribute("src"); video.load();
-    el("now").textContent = "Nenhum conteúdo selecionado"; el("channels").innerHTML = '<div class="hint">Nenhuma lista carregada.</div>'; say("Lista limpa.");
+  document.getElementById("clearList").addEventListener("click",()=>{
+    channels=[];currentSelectedIndex=-1;stopPlayers();video.pause();video.removeAttribute("src");video.load();showSpinner(false);
+    document.getElementById("now").textContent="Nenhum conteúdo selecionado";channelsContainer.innerHTML='<div class="hint">Nenhuma lista carregada.</div>';say("Lista limpa.");
   });
-  el("search").addEventListener("input", render);
-  var filters = document.querySelectorAll("[data-area]");
-  for (var i = 0; i < filters.length; i++) filters[i].addEventListener("click", function () {
-    activeArea = this.getAttribute("data-area"); for (var j = 0; j < filters.length; j++) filters[j].classList.toggle("active", filters[j] === this); render();
+  document.getElementById("search").addEventListener("input",()=>{currentSelectedIndex=-1;renderChannels();});
+  document.querySelectorAll("[data-area]").forEach(button=>button.addEventListener("click",()=>{activeArea=button.dataset.area;currentSelectedIndex=-1;document.querySelectorAll("[data-area]").forEach(b=>b.classList.toggle("active",b===button));renderChannels();}));
+  document.addEventListener("keydown",e=>{
+    const tag=e.target&&e.target.tagName?e.target.tagName.toLowerCase():"";
+    if(["input","textarea","select","button"].includes(tag)&&e.key!=="Escape")return;
+    const visible=Array.from(channelsContainer.querySelectorAll(".channel"));
+    if(e.key.toLowerCase()==="l"){e.preventDefault();fileInput.click();return;}
+    if(visible.length&&e.key==="ArrowDown"){e.preventDefault();currentSelectedIndex=(currentSelectedIndex+1)%visible.length;updateSelection();return;}
+    if(visible.length&&e.key==="ArrowUp"){e.preventDefault();currentSelectedIndex=(currentSelectedIndex-1+visible.length)%visible.length;updateSelection();return;}
+    if(e.key==="Enter"&&visible.length&&currentSelectedIndex>=0){e.preventDefault();visible[currentSelectedIndex].click();return;}
+    if(e.key===" "){e.preventDefault();video.paused?video.play().catch(()=>{}):video.pause();}
+    else if(e.key==="+"||e.key==="="){e.preventDefault();video.volume=Math.min(video.volume+.1,1);}
+    else if(e.key==="-"){e.preventDefault();video.volume=Math.max(video.volume-.1,0);}
+    else if(e.key.toLowerCase()==="m"){e.preventDefault();video.muted=!video.muted;}
+    else if(e.key.toLowerCase()==="f"){e.preventDefault();if(!document.fullscreenElement){if(video.requestFullscreen)video.requestFullscreen();else if(video.webkitRequestFullscreen)video.webkitRequestFullscreen();}else if(document.exitFullscreen)document.exitFullscreen();}
+    else if(e.key.toLowerCase()==="p"){e.preventDefault();if(document.pictureInPictureElement){document.exitPictureInPicture().catch(()=>{});}else if(video.requestPictureInPicture)video.requestPictureInPicture().catch(()=>{});}
   });
-  document.addEventListener("keydown", function (event) {
-    var tag = event.target && event.target.tagName ? event.target.tagName.toLowerCase() : "";
-    if (tag === "input" || tag === "textarea" || tag === "select") return;
-    if (event.key.toLowerCase() === "l") el("file").click();
-    if (event.key.toLowerCase() === "m") el("video").muted = !el("video").muted;
-  });
-})();</script></body></html>
+  const debounceDelay=250,debounceTimes={ArrowUp:0,ArrowDown:0,Enter:0," ":0,m:0,f:0,p:0,l:0,volUp:0,volDown:0};
+  function simulateKeyEvent(key){document.dispatchEvent(new KeyboardEvent("keydown",{key,bubbles:true}));}
+  function pollGamepad(){
+    const gamepads=navigator.getGamepads?navigator.getGamepads():[];const gp=gamepads&&gamepads[0];
+    if(gp){const now=Date.now();const mapping=[[12,"ArrowUp"],[13,"ArrowDown"],[0,"Enter"],[1," "],[6,"-"],[7,"+"],[2,"m"],[3,"f"],[4,"l"],[8,"p"]];
+      mapping.forEach(([index,key])=>{if(gp.buttons[index]&&gp.buttons[index].pressed){const bucket=key==="+"?"volUp":key==="-"?"volDown":key;if(now-(debounceTimes[bucket]||0)>debounceDelay){simulateKeyEvent(key);debounceTimes[bucket]=now;}}});
+    }
+    requestAnimationFrame(pollGamepad);
+  }
+  window.addEventListener("gamepadconnected",e=>say("Controle conectado: "+e.gamepad.id));
+  if(navigator.getGamepads)requestAnimationFrame(pollGamepad);
+  video.addEventListener("playing",()=>showSpinner(false));video.addEventListener("waiting",()=>showSpinner(true));video.addEventListener("error",()=>{showSpinner(false);if(video.error)say("Erro de mídia HTML5: código "+video.error.code+". Consulte o endereço do conteúdo e o suporte ao formato.");});
+})();
+</script>
+</body>
+</html>
