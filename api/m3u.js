@@ -207,7 +207,10 @@ module.exports = async function handler(req, res) {
           : [502, 503, 504].includes(status)
             ? "A origem retornou erro de serviço/gateway; isso não comprova, sozinho, que houve bloqueio."
             : "A origem respondeu com um status HTTP de erro.";
-        return res.status(502).json({
+        // Preserve gateway/service statuses so the client sees the real failure class.
+        // Other upstream HTTP errors are represented as 502 because the proxy could not obtain a playlist.
+        const clientStatus = status === 503 || status === 504 ? status : 502;
+        return res.status(clientStatus).json({
           error: "A origem respondeu HTTP " + status + ". O serviço auxiliar não conseguiu obter a playlist; veja o diagnóstico técnico.",
           stage: "upstream_http_response",
           diagnosis: { cause, upstreamStatus: status, upstreamStatusText: upstream.statusText || "",
@@ -264,8 +267,12 @@ module.exports = async function handler(req, res) {
   } catch (error) {
     const msg = error && error.name === "AbortError" ? "Tempo limite ao buscar a playlist." : (error.message || "Falha ao buscar a playlist.");
     if (res.headersSent) return res.destroy(error);
-    return res.status(400).json({ error: msg, stage: "request_or_network_error",
+    const errorCode = error?.code || error?.cause?.code || "";
+    const clientStatus = error?.name === "AbortError" ? 504
+      : /URL inválida|Use uma URL|usuário ou senha|Endereço local|Destino local|privado não permitido|não permitido/i.test(msg) ? 400
+      : 502;
+    return res.status(clientStatus).json({ error: msg, stage: "request_or_network_error",
       diagnosis: { cause: error?.name === "AbortError" ? "timeout" : "dns_tls_network_or_validation",
-        errorName: error?.name || "Error", errorCode: error?.code || error?.cause?.code || "", errorMessage: msg } });
+        errorName: error?.name || "Error", errorCode, errorMessage: msg } });
   }
 };
