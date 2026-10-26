@@ -179,7 +179,13 @@ module.exports = async function handler(req, res) {
         secureTarget.protocol = "https:";
         try {
           const validatedSecureTarget = await validateTarget(secureTarget.href);
+          const previousAttempts = upstream.__cinePlayerAttempts || [];
           const secureResponse = await fetchUpstream(validatedSecureTarget, controller);
+          // Preserve both HTTP and HTTPS attempt histories for an accurate diagnosis.
+          secureResponse.__cinePlayerAttempts = [
+            ...previousAttempts,
+            ...(secureResponse.__cinePlayerAttempts || [])
+          ];
           target = validatedSecureTarget;
           upstream = secureResponse;
         } catch {
