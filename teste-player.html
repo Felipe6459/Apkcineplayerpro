@@ -188,12 +188,21 @@ function playItem(x){
  let index=0,lastError=null,attempts=[];
  const cleanup=()=>{if(state.hls){state.hls.destroy();state.hls=null}};
  const cleanupTs=()=>{if(state.mpegts){try{state.mpegts.pause();state.mpegts.unload();state.mpegts.detachMediaElement();state.mpegts.destroy()}catch(_){}state.mpegts=null}};
+ let playbackWatchdog=null, watchdogExpired=false;
  const showFinal=fallback=>{
+  if(playbackWatchdog){clearTimeout(playbackWatchdog);playbackWatchdog=null}
   cleanup();cleanupTs();
   const e=lastError||{},status=Number(e.status||0)||null,mediaCode=e.mediaCode||null;
   const detail=e.details||e.message||fallback||"sem detalhe fornecido pelo navegador";
   message("Falha na reprodução de "+x.name+". "+explain(detail,status,mediaCode)+" Diagnóstico: "+detail+(status?" (HTTP "+status+")":"")+(e.contentType?" · Content-Type "+e.contentType:"")+(e.type?" · tipo "+e.type:"")+(e.url?" · resposta "+safeUrl(e.url):"")+". Variantes testadas: "+attempts.join(" | ")+". Caminhos privados ocultados.");
  };
+ // Evita que falhas sem evento fatal deixem o player carregando indefinidamente.
+ playbackWatchdog=setTimeout(()=>{
+  watchdogExpired=true;
+  lastError=lastError||{type:"timeout",details:"Tempo limite: o stream não entregou dados de mídia para iniciar a reprodução",url:original};
+  showFinal("O stream não iniciou em 45 segundos");
+ },45000);
+ v.addEventListener("playing",()=>{if(playbackWatchdog){clearTimeout(playbackWatchdog);playbackWatchdog=null}},{once:true});
  const playNative=()=>{
   let i=0;
   const next=()=>{
