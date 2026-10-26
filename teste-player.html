@@ -185,16 +185,26 @@ function playItem(x){
   if(/frag.*load|network|timeout/.test(d))return "O manifesto ou os segmentos não foram baixados.";
   return "O navegador não conseguiu abrir o stream.";
  };
- let index=0,lastError=null,attempts=[];
+ let index=0,lastError=null,attempts=[],diagStage="preparação",videoErrorSnapshot=null;
+ const stage=name=>{diagStage=name;};
  const cleanup=()=>{if(state.hls){state.hls.destroy();state.hls=null}};
  const cleanupTs=()=>{if(state.mpegts){try{state.mpegts.pause();state.mpegts.unload();state.mpegts.detachMediaElement();state.mpegts.destroy()}catch(_){}state.mpegts=null}};
  let playbackWatchdog=null, watchdogExpired=false;
+ v.addEventListener("error",()=>{const er=v.error;videoErrorSnapshot=er?{code:er.code,message:String(er.message||"").slice(0,240)}:null;if(er){lastError={...(lastError||{}),mediaCode:er.code,videoMessage:er.message||"",stage:diagStage};}});
+ v.addEventListener("waiting",()=>{if(diagStage==="reprodução iniciada")stage("buffering/esperando dados");});
+ v.addEventListener("stalled",()=>{stage("download de mídia parado (stalled)");});
  const showFinal=fallback=>{
   if(playbackWatchdog){clearTimeout(playbackWatchdog);playbackWatchdog=null}
   cleanup();cleanupTs();
   const e=lastError||{},status=Number(e.status||0)||null,mediaCode=e.mediaCode||null;
   const detail=e.details||e.message||fallback||"sem detalhe fornecido pelo navegador";
-  message("Falha na reprodução de "+x.name+". "+explain(detail,status,mediaCode)+" Diagnóstico: "+detail+(status?" (HTTP "+status+")":"")+(e.contentType?" · Content-Type "+e.contentType:"")+(e.type?" · tipo "+e.type:"")+(e.url?" · resposta "+safeUrl(e.url):"")+". Variantes testadas: "+attempts.join(" | ")+". Caminhos privados ocultados.");
+  const mediaNames={1:"MEDIA_ERR_ABORTED (reprodução cancelada)",2:"MEDIA_ERR_NETWORK (falha de rede)",3:"MEDIA_ERR_DECODE (falha de decodificação)",4:"MEDIA_ERR_SRC_NOT_SUPPORTED (fonte/formato não suportado ou resposta inválida)"};
+  const videoDetails=videoErrorSnapshot?(" · erro do elemento de vídeo: "+(mediaNames[videoErrorSnapshot.code]||("código "+videoErrorSnapshot.code))+(videoErrorSnapshot.message?" — "+videoErrorSnapshot.message:"")):"";
+  const cause=e.cause||e.causeCode||e.code||"";
+  const location=e.stage||diagStage;
+  const statusText=status?" · HTTP "+status:" · HTTP não exposto pelo navegador";
+  const nextStep=e.nextStep||"Se o diagnóstico não trouxer HTTP/código da origem, o navegador não expôs essa informação; compare com a tentativa via /api/stream e verifique os logs da origem/proxy.";
+  message("FALHA EM: "+location+" · Conteúdo: "+x.name+". "+explain(detail,status,mediaCode)+" Diagnóstico técnico: "+detail+statusText+(e.contentType?" · Content-Type "+e.contentType:"")+(e.type?" · tipo "+e.type:"")+(cause?" · código/causa "+cause:"")+videoDetails+(e.url?" · endereço testado "+safeUrl(e.url):"")+". Variantes testadas: "+(attempts.join(" | ")||"nenhuma")+". Próxima verificação: "+nextStep+" Caminhos privados ocultados.");
  };
  // Evita que falhas sem evento fatal deixem o player carregando indefinidamente.
  playbackWatchdog=setTimeout(()=>{
@@ -207,18 +217,18 @@ function playItem(x){
   let i=0;
   const next=()=>{
    if(i>=candidates.length){showFinal("MediaError "+(v.error?v.error.code:"indisponível"));return}
-   const candidate=candidates[i++];attempts.push(safeUrl(candidate));
+   const candidate=candidates[i++];attempts.push(safeUrl(candidate));stage("reprodução nativa / carregamento da mídia");videoErrorSnapshot=null;
    let finished=false;
    v.onerror=()=>{
     if(finished)return;finished=true;
     const code=v.error?v.error.code:null;
-    lastError={details:"MediaError "+(code||"indisponível"),mediaCode:code,url:candidate};
+    lastError={details:"MediaError "+(code||"indisponível"),mediaCode:code,url:candidate,stage:"reprodução nativa / carregamento da mídia",nextStep:code===4?"A reprodução nativa não revela o status HTTP; o player seguirá para as demais fontes. Se todas falharem, consulte o diagnóstico do proxy.":code===3?"Verifique codec/container e compatibilidade do navegador.":"Verifique conectividade e resposta do servidor."};
     next();
    };
    v.onloadedmetadata=()=>{
     if(finished)return;finished=true;
     message("Fonte reconhecida pelo navegador. Iniciando reprodução...");
-    v.play().then(()=>message("Reprodução iniciada: "+x.name)).catch(()=>message("Fonte reconhecida. Toque em ▶ no vídeo para iniciar."));
+    v.play().then(()=>{stage("reprodução iniciada");message("Reprodução iniciada: "+x.name)}).catch(()=>message("Fonte reconhecida. Toque em ▶ no vídeo para iniciar."));
    };
    v.src=candidate;v.load();
   };
@@ -238,14 +248,14 @@ function playItem(x){
     if(unknownLive){playNative();return}
     showFinal("Falha ao abrir o stream MPEG-TS");return
    }
-   const candidate=candidates[i++];attempts.push(safeUrl(candidate));cleanupTs();
+   const candidate=candidates[i++];attempts.push(safeUrl(candidate));stage("decodificação MPEG-TS / carregamento do stream");cleanupTs();
    let failed=false;
    try{
     const player=mpegts.createPlayer({type:"mpegts",isLive:classify(x)==="live",url:candidate},{enableWorker:true,lazyLoad:false,stashInitialSize:128*1024});
     state.mpegts=player;player.attachMediaElement(v);
     player.on(mpegts.Events.ERROR,(type,detail,info)=>{
      if(failed)return;failed=true;
-     lastError={type:String(type||"mpegts"),details:String(detail||"erro MPEG-TS"),message:info?JSON.stringify(info).slice(0,200):"",url:candidate};
+     lastError={type:String(type||"mpegts"),details:String(detail||"erro MPEG-TS"),message:info?JSON.stringify(info).slice(0,400):"",url:candidate,stage:"decodificação MPEG-TS / carregamento do stream",nextStep:"O evento MPEG-TS foi registrado; veja o detalhe do demuxer/loader acima. Se não houver HTTP, o navegador/biblioteca não o forneceu."};
      cleanupTs();next();
     });
     player.load();
@@ -257,7 +267,7 @@ function playItem(x){
  const tryHls=()=>{
   cleanup();
   if(index>=candidates.length){showFinal();return}
-  const candidate=candidates[index++];attempts.push(safeUrl(candidate));
+  const candidate=candidates[index++];attempts.push(safeUrl(candidate));stage("manifesto HLS / carregamento de segmentos");
   if(!window.Hls||!Hls.isSupported()){playNative();return}
   message("Testando stream HLS ("+index+" de "+candidates.length+")...");
   const h=new Hls({enableWorker:true,lowLatencyMode:false,capLevelToPlayerSize:true,startLevel:-1,abrEwmaDefaultEstimate:500000,abrBandWidthFactor:0.8,abrBandWidthUpFactor:0.7,maxBufferLength:30,maxMaxBufferLength:60,backBufferLength:30,maxBufferHole:0.5,manifestLoadingTimeOut:15000,levelLoadingTimeOut:20000,fragLoadingTimeOut:25000,manifestLoadingMaxRetry:2,manifestLoadingRetryDelay:500,levelLoadingMaxRetry:3,levelLoadingRetryDelay:500,fragLoadingMaxRetry:4,fragLoadingRetryDelay:500,fragLoadingMaxRetryTimeout:4000});
@@ -274,14 +284,14 @@ function playItem(x){
    const responseBody=String(response.text||response.responseText||network.responseText||network.response||"").slice(0,900);
    let responseHint="";
    if(responseBody){try{const parsedBody=JSON.parse(responseBody);const d=parsedBody.diagnostic||{};const codes=[d.code,d.causeCode,d.causeName].filter(Boolean).join("/");const tls=[d.tlsHost?"host TLS: "+d.tlsHost:"",d.tlsReason?"motivo TLS: "+d.tlsReason:"",d.certificateNames?"nomes do certificado: "+d.certificateNames:""].filter(Boolean).join(" · ");responseHint=[parsedBody.error||parsedBody.message||parsedBody.stage||"",codes?"código técnico: "+codes:"",tls,parsedBody.stage?"etapa: "+parsedBody.stage:""].filter(Boolean).join(" · ")}catch(_){responseHint=responseBody.replace(/<[^>]*>/g," ").replace(/\s+/g," ").trim().slice(0,300)}}
-   const nextError={type:data.type||"erro HLS",details:(data.details||data.reason||"erro HLS")+(responseHint?" · resposta do servidor: "+responseHint:""),status:Number(response.code||network.status||0)||null,url:response.url||network.url||candidate,contentType:response.headers&&response.headers["content-type"]||network.getResponseHeader&&network.getResponseHeader("content-type")||""};
+   const nextError={stage:"manifesto HLS / carregamento de segmentos",type:data.type||"erro HLS",details:(data.details||data.reason||"erro HLS")+(responseHint?" · resposta do servidor: "+responseHint:""),status:Number(response.code||network.status||0)||null,url:response.url||network.url||candidate,contentType:response.headers&&response.headers["content-type"]||network.getResponseHeader&&network.getResponseHeader("content-type")||""};
    // Preserve a useful same-origin proxy HTTP status instead of overwriting it
    // with a later direct-origin network error that exposes no status.
    if(!lastError || nextError.status || !lastError.status)lastError=nextError;
    cleanup();if(index<candidates.length)tryHls();else showFinal();
   });
   h.on(Hls.Events.MANIFEST_PARSED,()=>{
-   message("Manifesto HLS reconhecido. Iniciando reprodução...");
+   stage("manifesto HLS recebido; iniciando decodificação");message("Manifesto HLS reconhecido. Iniciando reprodução...");
    v.play().then(()=>message("Reprodução iniciada: "+x.name)).catch(()=>message("O stream foi reconhecido. Toque em ▶ no vídeo para iniciar."));
   });
   h.attachMedia(v);h.loadSource(candidate);
