@@ -265,7 +265,10 @@ function playItem(x){
   h.on(Hls.Events.ERROR,(_,data)=>{
    if(!data.fatal||failed)return;failed=true;
    const response=data.response||{},network=data.networkDetails||{};
-   const nextError={type:data.type||"erro HLS",details:data.details||data.reason||"erro HLS",status:Number(response.code||network.status||0)||null,url:response.url||network.url||candidate,contentType:response.headers&&response.headers["content-type"]||""};
+   const responseBody=String(response.text||response.responseText||network.responseText||network.response||"").slice(0,900);
+   let responseHint="";
+   if(responseBody){try{const parsedBody=JSON.parse(responseBody);responseHint=parsedBody.error||parsedBody.message||parsedBody.stage||""}catch(_){responseHint=responseBody.replace(/<[^>]*>/g," ").replace(/\s+/g," ").trim().slice(0,300)}}
+   const nextError={type:data.type||"erro HLS",details:(data.details||data.reason||"erro HLS")+(responseHint?" · resposta do servidor: "+responseHint:""),status:Number(response.code||network.status||0)||null,url:response.url||network.url||candidate,contentType:response.headers&&response.headers["content-type"]||network.getResponseHeader&&network.getResponseHeader("content-type")||""};
    // Preserve a useful same-origin proxy HTTP status instead of overwriting it
    // with a later direct-origin network error that exposes no status.
    if(!lastError || nextError.status || !lastError.status)lastError=nextError;
