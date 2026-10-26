@@ -82,7 +82,12 @@ module.exports = async function handler(req, res) {
     let target = await validateTarget(rawUrl);
     let upstream;
     for (let redirects = 0; redirects <= 4; redirects++) {
-      const headers = { "Accept": "*/*" };
+      const headers = {
+        "Accept": "*/*",
+        // A browser-like UA avoids origins that drop or reject the default Node/Undici client.
+        "User-Agent": "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
+        "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8"
+      };
       if (req.headers.range) headers.Range = req.headers.range;
       upstream = await fetch(target.href, {
         method: req.method,
