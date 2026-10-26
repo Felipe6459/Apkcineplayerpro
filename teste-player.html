@@ -107,7 +107,7 @@ function classify(item){
  else if(area==="live"&&/\/(movie|movies|film|films|vod)\//.test(url))area="movies";
  else if(area==="live"&&/\/(live|channel|channels)\//.test(url))area="live";
  if(area==="live"&&/\b(series|serie|seriados?|temporada|episodios?|s[0-9]{1,2}e[0-9]{1,3}|[0-9]{1,2}x[0-9]{1,3})\b/.test(group))area="series";
- else if(area==="live"&&/\b(filmes?|movies?|films?|cinema|filmoteca|vod filmes|lancamentos de filmes)\b/.test(group))area="movies";
+ else if(area==="live"&&/\b(filmes?|movies?|films?|cinema|filmoteca|vod filmes|lancamentos de filmes|adulto|adult|xxx|suspense|thriller|acao|action|aventura|adventure|romance|romantico|comedia|drama|terror|horror|ficcao cientifica|documentario|animacao)\b/.test(group))area="movies";
  else if(area==="live"&&/\b(tv ao vivo|canais? ao vivo|live tv|canais?|televisao|television)\b/.test(group))area="live";
  if(area==="live"&&(item.series||item.season||item.episode||/\b(temporada|episodio|s[0-9]{1,2}e[0-9]{1,3}|[0-9]{1,2}x[0-9]{1,3})\b/.test(name)))area="series";
  if(area==="live"&&/\b(filmes?|movies?|cinema|filmoteca)\b/.test(name))area="movies";
