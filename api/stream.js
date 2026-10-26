@@ -151,9 +151,18 @@ module.exports = async function handler(req, res) {
   } catch (error) {
     if (res.headersSent) return res.destroy(error);
     const timeout = error?.name === "AbortError";
+    const cause = error?.cause;
+    // Expose only network error identifiers, never the requested URL or credentials.
+    const diagnostic = {
+      name: String(error?.name || "Error").slice(0, 80),
+      code: String(error?.code || "").slice(0, 80) || undefined,
+      causeName: String(cause?.name || "").slice(0, 80) || undefined,
+      causeCode: String(cause?.code || "").slice(0, 80) || undefined
+    };
     return res.status(timeout ? 504 : 502).json({
       error: timeout ? "Tempo limite ao buscar a mídia." : (error?.message || "Falha ao buscar a mídia."),
-      stage: timeout ? "upstream_timeout" : "upstream_fetch"
+      stage: timeout ? "upstream_timeout" : "upstream_fetch",
+      diagnostic
     });
   } finally {
     clearTimeout(timer);
