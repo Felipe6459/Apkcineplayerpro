@@ -156,8 +156,13 @@ function playItem(x){
  v.pause();v.onerror=null;v.onloadedmetadata=null;v.removeAttribute("src");v.load();$("playing").textContent=x.name;
  let parsed;try{parsed=new URL(x.url)}catch(_){message("O endereço deste conteúdo é inválido.");return}
  const original=parsed.href, path=parsed.pathname.toLowerCase();
- const isTs=/\.ts$/i.test(path);
- const isHls=/\.m3u8?$/i.test(path)||(!/\.(mp4|m4v|webm|mp3|m4a|aac|ogg|mov|avi|mkv|ts)$/i.test(path)&&classify(x)==="live");
+ const explicitHls=/\.m3u8?$/i.test(path);
+ const knownMediaExtension=/\.(mp4|m4v|webm|mp3|m4a|aac|ogg|mov|avi|mkv|ts)$/i.test(path);
+ // Muitos servidores IPTV Xtream entregam canais ao vivo em MPEG-TS sem extensão.
+ // Não presumir HLS apenas porque a URL não termina em .m3u8.
+ const unknownLive=classify(x)==="live"&&!explicitHls&&!knownMediaExtension;
+ const isTs=/\.ts$/i.test(path)||unknownLive;
+ const isHls=explicitHls;
  const directMedia=/\.(mp4|m4v|webm|mp3|m4a|aac|ogg|mov|avi|mkv)(?:$|[?#])/i.test(original);
  const proxyFor=u=>{const p=new URL("/api/stream",location.origin);p.searchParams.set("url",u);return p.href};
  const candidates=[];
@@ -210,11 +215,20 @@ function playItem(x){
   };
   next();
  };
+ let hlsTriedAfterUnknownLive=false;
  const playTs=()=>{
-  if(!window.mpegts||!mpegts.isSupported()){message("Este navegador não oferece suporte à reprodução MPEG-TS. Tentando reprodução direta.");playNative();return}
+  if(!window.mpegts||!mpegts.isSupported()){
+   message("Este navegador não oferece suporte a MPEG-TS via MSE. Testando HLS e reprodução direta...");
+   if(unknownLive&&!hlsTriedAfterUnknownLive){hlsTriedAfterUnknownLive=true;index=0;tryHls();return}
+   playNative();return
+  }
   let i=0;
   const next=()=>{
-   if(i>=candidates.length){showFinal("Falha ao abrir o stream MPEG-TS");return}
+   if(i>=candidates.length){
+    if(unknownLive&&!hlsTriedAfterUnknownLive){hlsTriedAfterUnknownLive=true;index=0;tryHls();return}
+    if(unknownLive){playNative();return}
+    showFinal("Falha ao abrir o stream MPEG-TS");return
+   }
    const candidate=candidates[i++];attempts.push(safeUrl(candidate));cleanupTs();
    let failed=false;
    try{
@@ -249,7 +263,7 @@ function playItem(x){
    message("Manifesto HLS reconhecido. Iniciando reprodução...");
    v.play().then(()=>message("Reprodução iniciada: "+x.name)).catch(()=>message("O stream foi reconhecido. Toque em ▶ no vídeo para iniciar."));
   });
-  h.loadSource(candidate);h.attachMedia(v);
+  h.attachMedia(v);h.loadSource(candidate);
  };
  if(isTs){playTs();return}
  if(isHls){tryHls();return}
