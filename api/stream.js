@@ -158,14 +158,24 @@ module.exports = async function handler(req, res) {
     const timeout = error?.name === "AbortError";
     const cause = error?.cause;
     // Expose only network error identifiers, never the requested URL or credentials.
+    const tlsNameMismatch = cause?.code === "ERR_TLS_CERT_ALTNAME_INVALID";
+    const certNames = cause?.cert?.subjectaltname;
     const diagnostic = {
       name: String(error?.name || "Error").slice(0, 80),
       code: String(error?.code || "").slice(0, 80) || undefined,
       causeName: String(cause?.name || "").slice(0, 80) || undefined,
-      causeCode: String(cause?.code || "").slice(0, 80) || undefined
+      causeCode: String(cause?.code || "").slice(0, 80) || undefined,
+      // Safe TLS details: hostname and certificate names only, never URL path/query.
+      tlsHost: tlsNameMismatch ? String(cause?.host || "").slice(0, 255) || undefined : undefined,
+      tlsReason: tlsNameMismatch ? String(cause?.reason || "").slice(0, 500) || undefined : undefined,
+      certificateNames: tlsNameMismatch ? String(certNames || "").slice(0, 500) || undefined : undefined
     };
     return res.status(timeout ? 504 : 502).json({
-      error: timeout ? "Tempo limite ao buscar a mídia." : (error?.message || "Falha ao buscar a mídia."),
+      error: timeout
+        ? "Tempo limite ao buscar a mídia."
+        : tlsNameMismatch
+          ? "O certificado HTTPS da origem não corresponde ao domínio solicitado. Use o domínio correto da origem ou peça ao provedor para corrigir o certificado."
+          : (error?.message || "Falha ao buscar a mídia."),
       stage: timeout ? "upstream_timeout" : "upstream_fetch",
       diagnostic
     });
