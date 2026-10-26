@@ -57,7 +57,7 @@ const state={items:[],area:"live",category:"__all",favorites:new Set(savedFavori
 function message(t){$("status").textContent=t}
 function parseM3U(text,baseUrl){
  const lines=String(text||"").replace(/^\uFEFF/,"").replace(/\r/g,"").split("\n");const out=[];let meta=null;
- const attr=(line,key)=>{const re=new RegExp("(?:^|\\s)"+key+"\\s*=\\s*(?:\"([^\"]*)\"|'([^']*)'|([^\\s,]+))","i");const m=line.match(re);return m?(m[1]??m[2]??m[3]??"").trim():""};
+ const attr=(line,key)=>{const re=new RegExp("(?:^|\s)"+key+"\s*=\s*(?:\"([^\"]*)\"|'([^']*)'|([^\s,]+))","i");const m=line.match(re);return m?(m[1]??m[2]??m[3]??"").trim():""};
  for(const raw of lines){const line=raw.trim().replace(/^\uFEFF/,"");if(!line)continue;
   if(/^#EXTINF(?:\s|:)/i.test(line)){const comma=line.indexOf(",");const attrs=comma>=0?line.slice(0,comma):line;const display=comma>=0?line.slice(comma+1).trim():"";meta={name:display||attr(attrs,"tvg-name")||"Conteúdo sem nome",group:attr(attrs,"group-title")||"Outros",logo:attr(attrs,"tvg-logo")||"",type:attr(attrs,"tvg-type")||attr(attrs,"content-type")||attr(attrs,"type"),tvgId:attr(attrs,"tvg-id"),series:attr(attrs,"series")||attr(attrs,"series-title"),season:attr(attrs,"season")||attr(attrs,"tvg-season"),episode:attr(attrs,"episode-num")||attr(attrs,"tvg-episode")};continue;}
   if(/^#EXTGRP:/i.test(line)){if(meta)meta.group=line.slice(line.indexOf(":")+1).trim()||meta.group;continue;}if(line.startsWith("#"))continue;
@@ -70,7 +70,7 @@ function parseM3U(text,baseUrl){
  function loadText(text,source,baseUrl){const items=parseM3U(text,baseUrl);state.items=items;state.area="live";state.category="__all";state.rendered=500;renderFilters();renderChannels();message(items.length?("Playlist carregada: "+items.length+" conteúdos. Origem: "+source+"."):"Não encontrei entradas de canais HTTP/HTTPS. Confira se o texto começa com #EXTM3U e se cada canal tem um endereço na linha seguinte.");}
  async function parseM3UReader(reader,baseUrl){
  const decoder=new TextDecoder("utf-8");let pending="";let meta=null;const out=[];let firstLine=true;let bytes=0;
- const attr=(line,key)=>{const re=new RegExp("(?:^|\\s)"+key+"\\s*=\\s*(?:\"([^\"]*)\"|'([^']*)'|([^\\s,]+))","i");const m=line.match(re);return m?(m[1]??m[2]??m[3]??"").trim():""};
+ const attr=(line,key)=>{const re=new RegExp("(?:^|\s)"+key+"\s*=\s*(?:\"([^\"]*)\"|'([^']*)'|([^\s,]+))","i");const m=line.match(re);return m?(m[1]??m[2]??m[3]??"").trim():""};
  function processLine(raw){let line=raw.trim();if(firstLine){line=line.replace(/^\uFEFF/,"");firstLine=false;if(!line.startsWith("#EXTM3U"))throw new Error("A resposta recebida não começa com #EXTM3U; pode não ser uma playlist válida.");}if(!line)return;
   if(/^#EXTINF(?:\s|:)/i.test(line)){const comma=line.indexOf(",");const attrs=comma>=0?line.slice(0,comma):line;const display=comma>=0?line.slice(comma+1).trim():"";meta={name:display||attr(attrs,"tvg-name")||"Conteúdo sem nome",group:attr(attrs,"group-title")||"Outros",logo:attr(attrs,"tvg-logo")||"",type:attr(attrs,"tvg-type")||attr(attrs,"content-type")||attr(attrs,"type"),tvgId:attr(attrs,"tvg-id"),series:attr(attrs,"series")||attr(attrs,"series-title"),season:attr(attrs,"season")||attr(attrs,"tvg-season"),episode:attr(attrs,"episode-num")||attr(attrs,"tvg-episode")};return;}
   if(/^#EXTGRP:/i.test(line)){if(meta)meta.group=line.slice(line.indexOf(":")+1).trim()||meta.group;return;}if(line.startsWith("#"))return;
@@ -84,7 +84,7 @@ function parseM3U(text,baseUrl){
 async function parseM3UAsync(text,baseUrl){
   const lines=String(text||"").replace(/^\uFEFF/,"").replace(/\r/g,"").split("\n");
   const out=[];let meta=null;
-  const attr=(line,key)=>{const re=new RegExp("(?:^|\\s)"+key+"\\s*=\\s*(?:\"([^\"]*)\"|'([^']*)'|([^\\s,]+))","i");const m=line.match(re);return m?(m[1]??m[2]??m[3]??"").trim():""};
+  const attr=(line,key)=>{const re=new RegExp("(?:^|\s)"+key+"\s*=\s*(?:\"([^\"]*)\"|'([^']*)'|([^\s,]+))","i");const m=line.match(re);return m?(m[1]??m[2]??m[3]??"").trim():""};
   for(let i=0;i<lines.length;i++){
    const line=lines[i].trim().replace(/^\uFEFF/,"");if(!line)continue;
    if(/^#EXTINF(?:\s|:)/i.test(line)){const comma=line.indexOf(",");const attrs=comma>=0?line.slice(0,comma):line;const display=comma>=0?line.slice(comma+1).trim():"";meta={name:display||attr(attrs,"tvg-name")||"Conteúdo sem nome",group:attr(attrs,"group-title")||"Outros",logo:attr(attrs,"tvg-logo")||"",type:attr(attrs,"tvg-type")||attr(attrs,"content-type")||attr(attrs,"type"),tvgId:attr(attrs,"tvg-id"),series:attr(attrs,"series")||attr(attrs,"series-title"),season:attr(attrs,"season")||attr(attrs,"tvg-season"),episode:attr(attrs,"episode-num")||attr(attrs,"tvg-episode")};continue;}
@@ -130,7 +130,7 @@ function inferGenre(item){const s=normText([item.group,item.name].join(" "));con
  ["Animação",/\b(animacao|anime|cartoon|infantil)\b/],
  ["Novidades",/\b(lancamento|lancamentos|estreia|estreias|202[5-9])\b/]
  ];for(const [label,re] of rules)if(re.test(s))return label;return "Outros"}
-function displayGroup(item){const raw=String(item.group||"").trim();const area=classify(item);if(area==="series"){if(item.series)return String(item.series).trim();const base=String(item.name||"").replace(/\\b(?:s\\d{1,2}e\\d{1,3}|\\d{1,2}x\\d{1,3}|temporada\\s*\\d+|epis[oó]dio\\s*\\d+)\\b/ig,"").replace(/[|:–—-]+\\s*$/,"").trim();if(base&&base!==item.name)return base;if(raw&&normText(raw)!=="outros")return raw;}if(raw&&normText(raw)!=="outros")return raw;const s=normText(item.name);if(area==="live"){const globo=/\b(globo|g1)\b/.test(s);const regions=[
+function displayGroup(item){const raw=String(item.group||"").trim();const area=classify(item);if(area==="series"){if(item.series)return String(item.series).trim();const base=String(item.name||"").replace(/\b(?:s\d{1,2}e\d{1,3}|\d{1,2}x\d{1,3}|temporada\s*\d+|epis[oó]dio\s*\d+)\b/ig,"").replace(/[|:–—-]+\s*$/,"").trim();if(base&&base!==item.name)return base;if(raw&&normText(raw)!=="outros")return raw;}if(raw&&normText(raw)!=="outros")return raw;const s=normText(item.name);if(area==="live"){const globo=/\b(globo|g1)\b/.test(s);const regions=[
  ["Nordeste",/\b(recife|fortaleza|salvador|maceio|natal|joao pessoa|aracaju|teresina|sao luis|nordeste|alagoas|pernambuco|ceara|bahia|sergipe|paraiba|piaui|maranhao|rn)\b/],
  ["Sul",/\b(curitiba|porto alegre|florianopolis|santa catarina|parana|rio grande do sul|globo sul|rs|sc|pr)\b/],
  ["Sudeste",/\b(sao paulo|sp|rio de janeiro|rj|minas gerais|mg|espirito santo|vitoria|campinas|santos|sudeste)\b/],
