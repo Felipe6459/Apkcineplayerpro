@@ -156,7 +156,12 @@ function playItem(x){
  try{parsed=new URL(original)}catch(_){message("O endereço deste conteúdo é inválido.");return}
  const candidates=[];
  const add=(u)=>{if(u&&!candidates.includes(u))candidates.push(u)};
- // Preserva o endereço original: não converte /ts em /m3u8 nem força HTTPS.
+ // Primeiro tenta a rota de mídia do próprio player, que mantém os endereços
+ // HLS relativos dentro do manifesto e evita falhas CORS quando a origem permite acesso.
+ const streamProxy=new URL("https://apkcineplayerpro.vercel.app/api/stream");
+ streamProxy.searchParams.set("url",parsed.href);
+ add(streamProxy.href);
+ // Fallback direto para distinguir falha do proxy de falha da origem.
  add(parsed.href);
  if(parsed.protocol==="http:"){const secureOriginal=new URL(parsed.href);secureOriginal.protocol="https:";add(secureOriginal.href);}
  const safeUrl=(value)=>{try{const u=new URL(value);return u.origin+"/[caminho ocultado]"}catch(_){return "endereço não identificado"}};
@@ -180,7 +185,9 @@ function playItem(x){
   const e=lastError||{};
   const status=Number(e.status||0)||null;
   const detail=e.details||e.message||fallbackDetail||"sem detalhe fornecido pelo navegador";
-  message("Falha na reprodução de "+x.name+". "+explain(detail,status)+" Diagnóstico: "+detail+(status?" (HTTP "+status+")":"")+". Variantes testadas: "+attempts.join(" | ")+". Caminhos privados ocultados.");
+  const networkHint=(!status&&/manifestloaderror|networkerror|levelloaderror|fragloaderror/i.test(detail))?" O navegador não informou status HTTP; isso costuma ocorrer com CORS, conexão interrompida ou resposta incompatível.": "";
+  const responseHint=e.responseText?" Trecho da resposta: "+e.responseText+".":"";
+  message("Falha na reprodução de "+x.name+". "+explain(detail,status)+networkHint+" Diagnóstico: "+detail+(status?" (HTTP "+status+")":"")+(e.type?" · tipo "+e.type:"")+(e.url?" · resposta "+safeUrl(e.url):"")+responseHint+". Variantes testadas: "+attempts.join(" | ")+". Caminhos privados ocultados.");
  };
  const tryHls=()=>{
   cleanup();
@@ -194,7 +201,9 @@ function playItem(x){
    if(!data.fatal)return;
    if(failed)return;failed=true;
    const response=data.response||{};
-   lastError={type:data.type,details:data.details||data.reason||"erro HLS",status:Number(response.code||0)||null,message:data.reason||"",url:response.url||""};
+   const networkDetails=data.networkDetails||{};
+   const responseText=String(response.text||response.responseText||"").replace(/https?:\/\/[^\s"'<>]+/gi,"[URL ocultada]").slice(0,180);
+   lastError={type:data.type||"erro HLS",details:data.details||data.reason||"erro HLS",status:Number(response.code||networkDetails.status||0)||null,message:data.reason||"",url:response.url||networkDetails.url||"",responseText};
    cleanup();
    if(index<candidates.length)tryHls();else showFinal();
   });
