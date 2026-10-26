@@ -260,10 +260,16 @@ function playItem(x){
   const candidate=candidates[index++];attempts.push(safeUrl(candidate));
   if(!window.Hls||!Hls.isSupported()){playNative();return}
   message("Testando stream HLS ("+index+" de "+candidates.length+")...");
-  const h=new Hls({enableWorker:true,lowLatencyMode:false,manifestLoadingTimeOut:20000,levelLoadingTimeOut:20000,fragLoadingTimeOut:30000});
-  state.hls=h;let failed=false;
+  const h=new Hls({enableWorker:true,lowLatencyMode:false,capLevelToPlayerSize:true,startLevel:-1,abrEwmaDefaultEstimate:500000,abrBandWidthFactor:0.8,abrBandWidthUpFactor:0.7,maxBufferLength:30,maxMaxBufferLength:60,backBufferLength:30,maxBufferHole:0.5,manifestLoadingTimeOut:15000,levelLoadingTimeOut:20000,fragLoadingTimeOut:25000,manifestLoadingMaxRetry:2,manifestLoadingRetryDelay:500,levelLoadingMaxRetry:3,levelLoadingRetryDelay:500,fragLoadingMaxRetry:4,fragLoadingRetryDelay:500,fragLoadingMaxRetryTimeout:4000});
+  state.hls=h;let failed=false,networkRecoveries=0,mediaRecoveries=0;
   h.on(Hls.Events.ERROR,(_,data)=>{
-   if(!data.fatal||failed)return;failed=true;
+   if(!data.fatal)return;
+   const detailName=String(data.details||"").toLowerCase();
+   // Recover transient fragment/level network failures before abandoning the stream.
+   // A manifest TLS/HTTP failure is not recoverable by restarting the same request.
+   if(data.type===Hls.ErrorTypes.NETWORK_ERROR&&!detailName.includes("manifestloaderror")&&networkRecoveries<2){networkRecoveries++;message("Conexão instável. Tentando recuperar o stream ("+networkRecoveries+"/2)...");h.startLoad(-1);return}
+   if(data.type===Hls.ErrorTypes.MEDIA_ERROR&&mediaRecoveries<1){mediaRecoveries++;message("Recuperando o decodificador de vídeo...");h.recoverMediaError();return}
+   if(failed)return;failed=true;
    const response=data.response||{},network=data.networkDetails||{};
    const responseBody=String(response.text||response.responseText||network.responseText||network.response||"").slice(0,900);
    let responseHint="";
