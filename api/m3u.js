@@ -115,6 +115,31 @@ async function fetchUpstream(url, controller) {
         "Accept-Language": "pt-BR,pt;q=0.9"
       }
     }
+    ,{
+      name: "android-chrome-mobile",
+      headers: {
+        "Accept": "*/*",
+        "User-Agent": "Mozilla/5.0 (Linux; Android 13; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
+        "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Referer": url.origin + "/"
+      }
+    },
+    {
+      name: "ffmpeg-lavf",
+      headers: {
+        "Accept": "*/*",
+        "User-Agent": "Lavf/60.3.100",
+        "Referer": url.origin + "/"
+      }
+    },
+    {
+      name: "android-vlc",
+      headers: {
+        "Accept": "*/*",
+        "User-Agent": "okhttp/3.12.13",
+        "Referer": url.origin + "/"
+      }
+    }
   ];
   let response;
   let lastProfile = profiles[0].name;
